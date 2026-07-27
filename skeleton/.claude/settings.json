@@ -36,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/guards/run-test-hook.sh\""
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/guards/sensor.sh\""
           }
         ]
       }
@@ -66,7 +66,7 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Сессия завершается. Если была реальная работа — выполни логику end-session НАПРЯМУЮ (слэш-команду вызвать нельзя, если она disable-model-invocation): triage буфера наблюдений (one-off → log, повторяемое правило → новый раздел в gotchas/реестре правил, ADR → decisions), затем допиши запись в <WIKI_PATH>/log (Что сделал / Что удивило / Что завтра) и очисти буфер. Если работы не было — ничего не делай."
+            "prompt": "Сессия завершается. Если была реальная работа — выполни логику end-session НАПРЯМУЮ (слэш-команду вызвать нельзя, если она disable-model-invocation): triage буфера наблюдений (one-off → log, повторяемое правило → новый раздел в .claude/docs/gotchas.md, ADR → decisions), затем допиши запись в WIKI_PATH/log.md (Что сделал / Что удивило / Что завтра) и очисти буфер. Если WIKI_PATH не задан — ограничься triage в .claude/docs/gotchas.md. Если работы не было — ничего не делай."
           }
         ]
       }
@@ -74,8 +74,14 @@
   },
   "permissions": {
     "allow": [
-      "Bash(<TEST_CMD> *)",
-      "Bash(bash .claude/guards/*.sh)"
+      "Bash(bash .claude/guards/*.sh)",
+      "Bash(bash scripts/verify-harness.sh)",
+      "Bash(npm run *)",
+      "Bash(npx vitest *)",
+      "Bash(uv run pytest *)",
+      "Bash(uv run ruff *)",
+      "Bash(uv run mypy *)",
+      "Bash(pytest *)"
     ]
   }
 }

@@ -21,33 +21,37 @@ Language-agnostic шаблон харнесса для **Claude Code** и **Curs
 Это **supervised-харнесс** (человек на цикле), не автономный loop-runner.
 Набор сознательно MVP — «строй от отказов».
 
-## Setup (5 шагов)
+## Setup
 
 ```bash
-# 1. Скопируй ядро в корень своего проекта
-cp -r skeleton/.claude ./
-cp skeleton/.harness.conf.example .harness.conf
-
-# 2. Заполни .harness.conf под свой проект.
-#    Все параметры с комментариями — внутри самого файла.
-
-# 3. Сделай скрипты исполняемыми
-chmod +x .claude/guards/*.sh .claude/skills/note/append.sh
-
-# 4. Создай CLAUDE.md из шаблона и замени плейсхолдеры
-cp skeleton/CLAUDE.md.template CLAUDE.md
-
-# 5. (Node) git-side gate на pre-push через husky
-cp skeleton/.husky/pre-push .husky/pre-push && chmod +x .husky/pre-push
-#    package.json: "prepare": "husky || true"   (|| true чтобы CI не падал)
-#    не-Node стек: повесь .claude/guards/gate.sh на pre-push вручную
-
-# (опц.) языковой пакет под свой стек
-cp -r skeleton/lang-packs/vue/skills/* .claude/skills/
+# Новый проект — одна команда, харнесс работает из коробки:
+copier copy gh:kushnirv/harness-engineering ~/projects/my-app --trust
+# Вопросы: project_name, lang (основной пак), extra_langs (доп. паки для монорепы)
 ```
 
-> Версионируемый sync ядра — через [Copier](https://copier.readthedocs.io)
-> (`copier update`). Установка и обратный канал — в [docs/architecture.md](docs/architecture.md).
+Что приезжает: CORE (guards / skills / rules) + стартовый скаффолд — `CLAUDE.md`,
+`.claude/settings.json` (хуки уже подключены), `.harness.conf` (fail-open),
+`scripts/`. Скаффолд — instance-owned: `copier update` его не перезаписывает
+(`_skip_if_exists`), обновляется только CORE.
+
+Стартовое состояние — fail-open: тестовые команды пусты → sensor и gate молчат,
+guard (readonly-зоны) и nudge работают сразу. Появился стек — заполни в
+`.harness.conf` `JS_TEST_CMD` / `PY_TEST_CMD` / `GATE_CMD` (примеры в комментариях).
+
+Sensor-диспетчер универсален: обычный однопакетный репозиторий, один стек или
+монорепа с несколькими воркспейсами — одна проводка. Роутинг по расширению файла
+(`.py` → pytest, `.ts/.tsx/...` → JS-раннер), корень воркспейса определяется
+автоматически (ближайший `package.json` / `pyproject.toml`).
+
+Опционально после copy:
+
+- **git-side gate на pre-push**: (Node) возьми `skeleton/.husky/pre-push` из этого
+  репозитория + `"prepare": "husky || true"` в package.json; не-Node стек — повесь
+  `.claude/guards/gate.sh` + `GATE_TEST_CMD` на pre-push вручную (`.githooks` + `core.hooksPath`).
+- **языковой пакет со скилами** под свой стек — `skeleton/lang-packs/`.
+
+> Обновление ядра: `copier update` внутри инстанса. Обратный канал (подъём
+> generic-находок в шаблон) — в [docs/architecture.md](docs/architecture.md).
 
 ## Проверить, что живо
 
@@ -55,19 +59,20 @@ cp -r skeleton/lang-packs/vue/skills/* .claude/skills/
 bash scripts/verify-harness.sh
 ```
 
-Smoke-тест: guard блокирует запись в readonly-зону (exit 2), sensor зелёный,
-gate, `/note`. Требует заполненного `.harness.conf` в проекте.
+Smoke-тест: guard блокирует запись в readonly-зону (exit 2), sensor fail-open,
+роутинг диспетчера по воркспейсам (фикстура), legacy-конфиг, `/note`.
+Работает и в свежем инстансе (сразу после `copier copy`), и в этом репозитории.
 
 ## Что дальше
 
 - **Как устроено** — диаграммы, дерево, dual-tool, языковые слои, память,
   capture-flow, Copier-sync → [docs/architecture.md](docs/architecture.md)
 - **Параметры конфига** — самодокументированы в
-  [skeleton/.harness.conf.example](skeleton/.harness.conf.example)
+  [skeleton/.harness.conf](skeleton/.harness.conf)
 - **Методология Specify → Implement → Review** →
   [docs/specify-implement-review.md](docs/specify-implement-review.md)
 - **Архитектурные решения (ADR)** → [docs/decisions.md](docs/decisions.md)
-- Агенту вход — не здесь, а в `skeleton/CLAUDE.md.template` (раздел «Агенту на входе»).
+- Агенту вход — не здесь, а в `skeleton/CLAUDE.md.jinja` (раздел «Агенту на входе»).
 
 ## Когда НЕ нужно
 

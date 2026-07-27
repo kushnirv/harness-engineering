@@ -8,7 +8,7 @@
     ],
     "afterFileEdit": [
       {
-        "command": "bash <REPO_ROOT>/.claude/guards/run-test-hook.sh"
+        "command": "bash <REPO_ROOT>/.claude/guards/sensor.sh"
       }
     ]
   }

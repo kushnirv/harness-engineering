@@ -1,0 +1,92 @@
+# {{ project_name }} — Claude Code Harness
+
+## Агенту на входе
+
+Карта входа (правила не дублируются здесь — живут в `.claude/rules/common/`):
+
+- **Грузится всегда:** этот файл + `rules/common/*.md` (workflow, testing, git, methodology-routing, context-hygiene).
+- **Состояние:** буфер наблюдений `.claude/PENDING-NOTES.md`; долгая память — `WIKI_PATH` (грузит `scripts/load-context.sh`).
+- **Нетривиальная задача → начни с `/plan`** (обязательные секции; таблица команд ниже). Однострочник — без церемоний.
+- **Сомнение в факте / пути / конфиге → проверь** (`ls`/`grep`/чтение), не действуй по памяти.
+
+## Rule Cascade
+
+1. Root `CLAUDE.md` (этот файл) — глобальные запреты и роутинг
+2. `.claude/rules/common/*.md` — универсальные правила (авто-загрузка Claude Code:
+   без frontmatter `paths:` → грузятся всегда; с `paths:` → scoped)
+3. `.claude/rules/lang/*.md` — языковые правила (path-scoped через frontmatter `paths:`)
+4. `<пакет>/CLAUDE.md` — правила конкретного пакета/приложения (по мере появления)
+5. Memory Bank / `.claude/docs/` — паттерны и архитектурные решения
+
+При конфликте: этот файл > пакетный CLAUDE.md > Memory Bank.
+Принцип языкового слоя: **специфика поверх общего** (`lang/` расширяет `common/`).
+
+## Конфигурация
+
+Параметры харнесса: `.harness.conf` (значения — в форме `${VAR:-default}`, чтобы
+sensor-диспетчер мог переопределять их через env; не переписывай на голое `VAR=`).
+
+Стартовое состояние — fail-open: тестовые команды и gate пусты → соответствующие
+хуки молчат. Включение по мере появления стека:
+
+1. JS/TS появился → `JS_TEST_CMD="npx vitest related --run"`
+2. Python появился → `PY_TEST_CMD="uv run pytest -q"`
+3. Стек собирается → `GATE_CMD` и `GATE_TEST_CMD` (примеры — в комментариях conf)
+
+Sensor-диспетчер (`guards/sensor.sh`) роутит правку по расширению файла в нужный
+стек и сам находит корень воркспейса (ближайший `package.json` / `pyproject.toml`).
+Обычный репозиторий и монорепа работают одной и той же проводкой.
+
+## Глобальные запреты
+
+- **Нельзя писать в `READONLY_ZONES`** (список — `.harness.conf`) — это генерируемые
+  файлы. Guard вернёт exit 2.
+- Нельзя менять `package.json` / `pyproject.toml` без явного запроса пользователя.
+- Нельзя коммитить и пушить без явного «commit» / «push» от пользователя.
+
+## Команды (ядро — skills)
+
+| Команда | Что делает |
+|---------|-----------|
+| `/plan` | Шаблон плана с обязательными секциями (допущения, контракты, teardown); авто-предлагается на нетривиальной задаче |
+| `/rename` | Найти все ссылки публичного символа ДО переименования → атомарная правка (ast-grep/grep) |
+| `/task` | Шаблон промпта для новой задачи агенту |
+| `/note <текст>` | Ручной capture наблюдения в буфер (для пользователя) |
+| `/end-session` | Triage буфера → log/gotchas/decisions + запись лога |
+
+## Capture наблюдений (конвенция)
+
+Буфер: `.claude/PENDING-NOTES.md` (append-only). Две двери, один буфер:
+
+- **Пользователь** → `/note <текст>` когда мелькнула мысль.
+- **Агент** → замечаешь наблюдение по ходу (поведение хуков, повторяющийся баг,
+  нарушение правила, удивившая деталь) — **проговори и сам положи в буфер** через
+  `bash .claude/skills/note/append.sh "<текст>"`. НЕ через `/note` (слэш-команда
+  помечена `disable-model-invocation` — не дёргать автоматически).
+- Тег `[generic]` в начале заметки → наблюдение уйдёт в обобщённый слой.
+
+Разбор — в конце через `/end-session`.
+
+## Хуки (автоматические)
+
+| Событие | Скрипт | Что делает |
+|---------|--------|-----------|
+| PreToolUse(Edit/Write/Bash) | `guards/block-zones.sh` | Запись в `READONLY_ZONES` → exit 2 |
+| PostToolUse(Edit/Write) | `guards/sensor.sh` | Диспетчер: `.py` → pytest-хук, `.ts/.tsx/...` → JS-хук; воркспейс определяет сам |
+| UserPromptSubmit | `guards/nudge.sh` | Напоминание о `/plan` на нетривиальной задаче |
+| Stop | `guards/gate.sh` | Repo-wide `GATE_CMD` без тестов; провал → exit 2 |
+| SessionStart | `scripts/load-context.sh` | Грузит `WIKI_PATH/overview.md` + хвост `log.md` |
+
+Проверка живости: `bash scripts/verify-harness.sh`
+
+## Обновление ядра харнесса
+
+Ядро приехало через Copier; версия — в `.copier-answers.yml`.
+
+```
+copier update          # подтянуть обновления CORE
+```
+
+CORE = `guards/`, `skills/`, `rules/`. Не-CORE (`settings.json`, `CLAUDE.md`,
+`.harness.conf`, `scripts/`, `.claude/docs/`, `.claude/agents/`) — твои файлы:
+приезжают при первом copy, `copier update` их не перезаписывает.

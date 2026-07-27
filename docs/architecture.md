@@ -119,13 +119,17 @@ harness-template/
 ├── .claude/                        ← харнесс этой репы; dogfood capture-flow
 │   └── skills/note/                ← /note живой (sensor/guard не нужны: нет билда/тестов)
 ├── skeleton/                       ← КОПИРУЕТСЯ в потребителя
-│   ├── CLAUDE.md.template          ← роутер с плейсхолдерами
+│   ├── CLAUDE.md.jinja             ← роутер; рендерится в CLAUDE.md (skip-if-exists)
 │   ├── PACKAGE_CLAUDE.md.template  ← guide пакета (generic)
+│   ├── .harness.conf               ← стартовый конфиг, fail-open (skip-if-exists)
+│   ├── .gitignore                  ← PENDING-NOTES и пр. (skip-if-exists)
 │   ├── .claude/
-│   │   ├── settings.json.template  ← хуки: PreToolUse(guard), PostToolUse(sensor), Stop(gate), UserPromptSubmit(nudge), SessionStart/End
+│   │   ├── settings.json           ← хуки уже подключены: PreToolUse(guard), PostToolUse(sensor), Stop(gate), UserPromptSubmit(nudge), SessionStart/End (skip-if-exists)
 │   │   ├── guards/
 │   │   │   ├── block-zones.sh      ← guard: читает READONLY_ZONES
-│   │   │   ├── run-test-hook.sh    ← sensor: WATCH_DIR + TEST_CMD (пофайлово)
+│   │   │   ├── sensor.sh           ← диспетчер: роутинг по расширению + автоопределение воркспейса (монорепа и однопакетный — одна проводка)
+│   │   │   ├── run-test-hook.sh    ← JS-sensor: WATCH_DIR + TEST_CMD (пофайлово)
+│   │   │   ├── run-pytest-hook.sh  ← Python-sensor: PYTEST_MODE (testmon | map)
 │   │   │   ├── gate.sh             ← gate Ярус 2: GATE_CMD без тестов (Stop + база pre-push, loop-safe)
 │   │   │   └── nudge.sh            ← nudge: UserPromptSubmit, boundary→verify-напоминание (exit 0, не блокирует)
 │   │   ├── skills/                 ← команды (текущий стандарт)
@@ -143,9 +147,8 @@ harness-template/
 │   │       └── gotchas.md.template       ← реестр ловушек (§-нумерация)
 │   ├── lang-packs/                 ← языковые пакеты поверх ядра
 │   │   └── vue/                    ← пример: add-component, dev-guide, Vue-ревью
-│   ├── scripts/load-context.sh     ← SessionStart: грузит внешнюю вики (опц.)
-│   ├── .cursor/hooks.json          ← делегирует к .claude/guards/ (dual-tool)
-│   └── .harness.conf.example       ← все параметры с комментариями
+│   ├── scripts/                    ← load-context.sh + verify-harness.sh (skip-if-exists)
+│   └── .cursor/hooks.json          ← делегирует к .claude/guards/ (dual-tool)
 ├── examples/minimal/               ← рабочий минимальный пример
 ├── scripts/verify-harness.sh       ← smoke test (guard exit 2, sensor green, /note)
 └── docs/specify-implement-review.md ← методология Specify → Implement → Review
