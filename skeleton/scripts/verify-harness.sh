@@ -148,6 +148,7 @@ JS_TEST_WORKDIR="${JS_TEST_WORKDIR:-}"
 WATCH_DIR="${WATCH_DIR:-}"
 TEST_CMD="${TEST_CMD:-}"
 TEST_WORKDIR="${TEST_WORKDIR:-}"
+SENSOR_MAP="${SENSOR_MAP:-}"
 CONF
 
 # Пробник вместо реального раннера: пишет свой cwd и молчит (mute the green).
@@ -186,6 +187,31 @@ if [[ "$LEGACY_WS" == "${FIXTURE}" ]]; then
   ok "sensor.sh: legacy TEST_CMD без JS_* работает (корневой воркспейс)"
 else
   fail "sensor.sh: legacy TEST_CMD сломан: ожидалось ${FIXTURE}, получено ${LEGACY_WS}"
+fi
+
+# SENSOR_MAP: явный workdir из карты бьёт автоопределение по манифесту
+mkdir -p "${FIXTURE}/custom"
+probe_map() { # $1 = файл, $2 = переменная команды, $3 = карта
+  rm -f "${FIXTURE}/probe-out"
+  echo "{\"tool_input\": {\"file_path\": \"${FIXTURE}/${1}\"}}" \
+    | env REPO_ROOT="$FIXTURE" "${2}=bash ${FIXTURE}/probe.sh" SENSOR_MAP="$3" \
+      bash "$DISPATCH" >/dev/null 2>&1 || true
+  [[ -f "${FIXTURE}/probe-out" ]] && cat "${FIXTURE}/probe-out" || echo "<не запускался>"
+}
+
+MAP_WS="$(probe_map "apps/web/src/Btn.tsx" JS_TEST_CMD "apps/web js custom")"
+if [[ "$MAP_WS" == "${FIXTURE}/custom" ]]; then
+  ok "sensor.sh: SENSOR_MAP workdir бьёт автоопределение (custom вместо apps/web)"
+else
+  fail "sensor.sh: SENSOR_MAP workdir не сработал: ожидалось ${FIXTURE}/custom, получено ${MAP_WS}"
+fi
+
+# SENSOR_MAP: папка явно отдана другому стеку → sensor молчит
+OWN_WS="$(probe_map "apps/web/src/Btn.tsx" JS_TEST_CMD "apps/web py")"
+if [[ "$OWN_WS" == "<не запускался>" ]]; then
+  ok "sensor.sh: SENSOR_MAP владение — .tsx в py-папке молчит"
+else
+  fail "sensor.sh: SENSOR_MAP владение нарушено — .tsx в py-папке запустил тесты в ${OWN_WS}"
 fi
 
 echo ""

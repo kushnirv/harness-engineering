@@ -11,6 +11,9 @@ _skip_if_exists:
   - ".gitignore"
   - "scripts/load-context.sh"
   - "scripts/verify-harness.sh"
+  # Языковые правила — стартер, инстанс их дорабатывает под себя (сужает paths:
+  # под свою раскладку, добавляет проектные пункты). Обновления пака не форсим.
+  - ".claude/rules/lang/*.md"
 
 _exclude:
   # ВНИМАНИЕ: это blacklist, не whitelist (Copier не поддерживает re-include после "*").
