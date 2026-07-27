@@ -136,7 +136,7 @@ harness-template/
 │   │   │   └── end-session/        ← /end-session: triage + лог
 │   │   ├── rules/                  ← common-core + per-language
 │   │   │   ├── common/             ← workflow, testing, git, methodology-routing, context-hygiene (всегда)
-│   │   │   └── lang/               ← vue.md, go.md, php.md (paths-scoped)
+│   │   │   └── lang/               ← vue.md, react.md, go.md, php.md, python.md (paths-scoped, мультивыбор)
 │   │   └── docs/                   ← проектная память (JIT)
 │   │       ├── ARCHITECTURE.md.template  ← generic
 │   │       ├── REVIEW.md.template        ← generic

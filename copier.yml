@@ -21,18 +21,26 @@ _exclude:
   # fenris это доказал). Раскатка при init, обновления метода НЕ форсятся сверху.
   - ".claude/agents"
 
-  # run-pytest-hook — Python-LANG sensor: доставляем ТОЛЬКО при lang=python (как lang-файлы ниже),
-  # а не исключаем глухо. Иначе Python-инстанс ссылается на хук, который синк не привозит.
-  - "{% if lang != 'python' %}.claude/guards/run-pytest-hook.sh{% endif %}"
+  # Пак доставляется, если выбран как основной (lang) ИЛИ как дополнительный
+  # (extra_langs) — монорепе нужно несколько сразу: python для бэкенда,
+  # react для фронта. Почему не мультивыбор в самом lang: copier парсит ответ
+  # ДО рендера шаблонов, и мультивыбор роняет существующие инстансы со строковым
+  # ответом (`lang: python` → "Not a YAML list"). Отдельный вопрос обратно совместим.
+
+  # run-pytest-hook — Python-LANG sensor: доставляем ТОЛЬКО когда выбран python
+  # (как lang-файлы ниже), а не исключаем глухо. Иначе Python-инстанс ссылается
+  # на хук, который синк не привозит.
+  - "{% if lang != 'python' and 'python' not in extra_langs %}.claude/guards/run-pytest-hook.sh{% endif %}"
 
   # md-libs lang file is not a standard LANG pack
   - ".claude/rules/lang/md-libs.md"
 
-  # Exclude each lang file that is NOT the selected lang
-  - "{% if lang != 'vue' %}.claude/rules/lang/vue.md{% endif %}"
-  - "{% if lang != 'go' %}.claude/rules/lang/go.md{% endif %}"
-  - "{% if lang != 'php' %}.claude/rules/lang/php.md{% endif %}"
-  - "{% if lang != 'python' %}.claude/rules/lang/python.md{% endif %}"
+  # Exclude each lang file that is NOT selected (neither primary nor extra)
+  - "{% if lang != 'vue' and 'vue' not in extra_langs %}.claude/rules/lang/vue.md{% endif %}"
+  - "{% if lang != 'go' and 'go' not in extra_langs %}.claude/rules/lang/go.md{% endif %}"
+  - "{% if lang != 'php' and 'php' not in extra_langs %}.claude/rules/lang/php.md{% endif %}"
+  - "{% if lang != 'python' and 'python' not in extra_langs %}.claude/rules/lang/python.md{% endif %}"
+  - "{% if lang != 'react' and 'react' not in extra_langs %}.claude/rules/lang/react.md{% endif %}"
 
 project_name:
   type: str
@@ -40,6 +48,13 @@ project_name:
 
 lang:
   type: str
-  help: Языковой пак
-  choices: [vue, go, php, python, none]
+  help: Основной языковой пак
+  choices: [vue, react, go, php, python, none]
   default: vue
+
+extra_langs:
+  type: str
+  multiselect: true
+  help: Дополнительные паки — для монорепы (напр. react поверх python). Обычный проект — пусто.
+  choices: [vue, react, go, php, python]
+  default: []
