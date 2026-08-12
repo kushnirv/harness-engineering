@@ -220,6 +220,12 @@ done <<< "$SPECS"
 CTX
 chmod +x scripts/load-context.sh
 
+# log-append.sh копируем из skeleton, а не генерируем heredoc'ом: правило в
+# rules/common/workflow.md и скил end-session требуют его ПО ИМЕНИ и запрещают Edit
+# для лога. Без файла правило неисполнимо — потребитель получал бы запрет без замены.
+cp "$TPL/skeleton/scripts/log-append.sh" scripts/log-append.sh
+chmod +x scripts/log-append.sh
+
 if [[ "$LANG_PACK" == python ]]; then
   mkdir -p tests
   cat > tests/test_smoke.py <<'PY'

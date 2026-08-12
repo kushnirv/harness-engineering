@@ -69,6 +69,29 @@ CTX_OUT=$(cd "$P" && bash scripts/load-context.sh 2>&1)
 echo "$CTX_OUT" | grep -q "код не начинаем" && R=yes || R=no
 check "SessionStart напоминает про spec-first" "$R" yes
 
+# log-append.sh: правило в workflow.md и скил end-session требуют его ПО ИМЕНИ и
+# запрещают Edit для лога. Проверяем не наличие, а работу — файл на месте, но не
+# вставляющий запись, оставил бы правило неисполнимым при зелёной проверке.
+[[ -x "$P/scripts/log-append.sh" ]] && R=yes || R=no
+check "log-append.sh доставлен и исполняем" "$R" yes
+
+LOG_BEFORE=$(wc -l < "$P/docs/log.md" 2>/dev/null | tr -d ' ')
+printf '## 2026-01-01 — проверка доставки\n\nстрока из verify-bootstrap\n' > "$P/.probe-entry.md"
+(cd "$P" && bash scripts/log-append.sh .probe-entry.md >/dev/null 2>&1) && R=yes || R=no
+check "log-append вставляет запись" "$R" yes
+
+LOG_AFTER=$(wc -l < "$P/docs/log.md" 2>/dev/null | tr -d ' ')
+[[ "${LOG_AFTER:-0}" -gt "${LOG_BEFORE:-0}" ]] && R=yes || R=no
+check "лог вырос после вставки" "$R" yes
+
+# Запись обязана лечь ПЕРЕД старыми: лог читается сверху.
+FIRST_HDR=$(grep -m1 '^## ' "$P/docs/log.md" 2>/dev/null)
+[[ "$FIRST_HDR" == *"проверка доставки"* ]] && R=yes || R=no
+check "новая запись легла сверху" "$R" yes
+
+(cd "$P" && : > .empty-entry.md && bash scripts/log-append.sh .empty-entry.md >/dev/null 2>&1) && R=прошло || R=отказ
+check "пустая запись отклонена" "$R" отказ
+
 (cd "$P" && uv run pytest -q >/dev/null 2>&1) && R=green || R=red
 check "smoke-тест зелёный" "$R" green
 
