@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Guard: блокирует запись в READONLY_ZONES.
-# PreToolUse(Edit/Write/Bash) — Claude Code. postToolUse — Cursor.
+# PreToolUse(Edit/Write/Bash) — Claude Code.
 # exit 2 → блокирует в обоих контекстах.
 #
 # Конфиг (.harness.conf):

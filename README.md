@@ -1,6 +1,6 @@
 # harness-template
 
-Language-agnostic шаблон харнесса для **Claude Code** и **Cursor**.
+Language-agnostic шаблон харнесса для **Claude Code**.
 
 Харнесс = `CLAUDE.md` + хуки (guard / sensor / gate) + skills + path-scoped rules +
 связь с долгосрочной памятью. Ядро не зависит от стека: Vue, Go, PHP, бэкенд.

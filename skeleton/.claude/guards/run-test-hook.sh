@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sensor: запускает тесты для изменённых файлов.
-# PostToolUse(Edit/Write) — Claude Code. afterFileEdit — Cursor.
+# PostToolUse(Edit/Write) — Claude Code.
 # Mute the green: exit 0 без вывода при успехе.
 # При провале: additionalContext → system reminder в агент.
 #
