@@ -205,6 +205,8 @@ READONLY_ZONES="$READONLY"
 GATE_CMD="$GATE_CMD"
 GATE_TEST_CMD="$GATE_TEST_CMD"
 GATE_WORKDIR=""
+# Секрет-скан на Ярусе 3 (пусто → pre-push пишет строкой, что скана нет).
+SECRET_SCAN_CMD=""
 # WIKI_PATH тут нет: файл версионируется, адрес вики личный. Личный слой —
 # ~/.harness/<имя-каталога-репо>.conf, load-context.sh читает его после этого файла.
 # Сверка «критерий приёмки ↔ тест» (scripts/check-ac-refs.sh). ID из чекбоксов секции
@@ -234,6 +236,17 @@ chmod +x scripts/check-ac-refs.sh
 # Порог ratchet: на свежем инстансе спек нет, непокрытых нуль — порог 0 честен.
 # Без файла скрипт считает порогом 0 и предупреждает; лучше создать явно.
 echo 0 > scripts/check-ac-refs.baseline
+
+# Активация Яруса 3. Логика — в .claude/guards/pre-push.sh (версионируется, едет обоими
+# каналами), тут только включение: git-хук работает на любом стеке и не требует npm.
+# husky остаётся опцией для команд, которые шарят хуки через package.json.
+mkdir -p .git/hooks
+cat > .git/hooks/pre-push <<'HOOK'
+#!/usr/bin/env sh
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+sh "${REPO_ROOT}/.claude/guards/pre-push.sh"
+HOOK
+chmod +x .git/hooks/pre-push
 
 if [[ "$LANG_PACK" == python ]]; then
   mkdir -p tests

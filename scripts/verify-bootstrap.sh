@@ -145,6 +145,74 @@ check "ID вне секции Verification не считается" "$R" про�
 
 # Прибираем пробы: инстанс проверяют дальше (smoke-тест, гейт), и наши файлы не должны
 # в этом участвовать. Проверка, которая пачкает объект проверки, врёт о следующих шагах.
+echo "== Ярус 3: gate + секрет-скан + тесты =="
+
+[[ -x "$P/.claude/guards/pre-push.sh" ]] && R=yes || R=no
+check "pre-push.sh доставлен и исполняем" "$R" yes
+
+# Активация. Логика в guards версионируется, а включает её git-хук — иначе Ярус 3
+# существует только у того, кто скопировал .husky/pre-push руками.
+[[ -x "$P/.git/hooks/pre-push" ]] && R=yes || R=no
+check "git-хук pre-push активирован" "$R" yes
+
+grep -q 'guards/pre-push.sh' "$P/.git/hooks/pre-push" 2>/dev/null && R=yes || R=no
+check "хук зовёт guard, а не дублирует логику" "$R" yes
+
+grep -q '^SECRET_SCAN_CMD=' "$P/.harness.conf" && R=yes || R=no
+check "SECRET_SCAN_CMD в конфиге есть" "$R" yes
+
+# Дальше проверяется САМ guard — порядок шагов и реакция на коды выхода. Реальные ruff и
+# pytest тут только замедляют: четыре прогона по несколько минут, а при сломанном порядке
+# (мутация) прогон вообще перестаёт заканчиваться. Подменяем на дешёвые, в конце возвращаем.
+sed -i '' 's|^GATE_CMD=.*|GATE_CMD="true"|' "$P/.harness.conf"
+# Тесты ЗЕЛЁНЫЕ и оставляют след. Падающие тесты делали проверку «падение скана блокирует»
+# декоративной: ненулевой код давали они, и проверка показывала «блокирует» даже там, где
+# секрет-скана в guard не было вовсе.
+sed -i '' 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="echo ТЕСТЫ-ПОШЛИ"|' "$P/.harness.conf"
+
+# `</dev/null` во всех прогонах ниже: gate.sh читает stdin до EOF, и с открытым stdin
+# проверка висит вместо того, чтобы дать вердикт.
+
+# Изоляция stdin. Git подаёт pre-push список ref'ов на stdin, а gate.sh читает stdin как
+# контекст Stop-хука и при `stop_hook_active: true` выходит, НЕ прогнав гейт. Подаём именно
+# такой JSON — гейт обязан отработать всё равно.
+# Гейт делаем ПАДАЮЩИМ: при успехе он молчит (mute the green), и метка в выводе не появилась
+# бы даже на исправном guard — проверка краснела бы всегда.
+sed -i '' 's|^GATE_CMD=.*|GATE_CMD="echo ГЕЙТ-ПОШЁЛ; false"|' "$P/.harness.conf"
+PP_OUT="$(printf '{"stop_hook_active": true}' | (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1)"
+[[ "$PP_OUT" == *"ГЕЙТ-ПОШЁЛ"* ]] && R=yes || R=no
+check "stdin вызывающего не утекает в gate" "$R" yes
+sed -i '' 's|^GATE_CMD=.*|GATE_CMD="true"|' "$P/.harness.conf"
+
+# Пустой SECRET_SCAN_CMD: push не блокируется, но и не молчит — иначе отсутствие скана
+# неотличимо от пройденного.
+PP_OUT="$( (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1 </dev/null )"
+[[ "$PP_OUT" == *"SECRET_SCAN_CMD пуст"* ]] && R=yes || R=no
+check "про отсутствие скана сказано вслух" "$R" yes
+
+# Падение скана обязано остановить push. Тесты зелёные, поэтому ненулевой код может прийти
+# только от скана.
+sed -i '' 's|^SECRET_SCAN_CMD=.*|SECRET_SCAN_CMD="false"|' "$P/.harness.conf"
+( (cd "$P" && sh .claude/guards/pre-push.sh) >/dev/null 2>&1 </dev/null ) && R=прошло || R=упало
+check "падение скана блокирует push" "$R" упало
+
+# Порядок: скан идёт ДО тестов. След тестов в выводе при падшем скане означает, что до них
+# дошли — то есть порядок обратный.
+PP_OUT="$( (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1 </dev/null )"
+[[ "$PP_OUT" == *"ТЕСТЫ-ПОШЛИ"* ]] && R=после || R=не-дошло
+check "скан отрабатывает до тестов" "$R" не-дошло
+
+# Зелёный скан пропускает дальше.
+sed -i '' 's|^SECRET_SCAN_CMD=.*|SECRET_SCAN_CMD="true"|' "$P/.harness.conf"
+PP_OUT="$( (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1 </dev/null )"
+[[ "$PP_OUT" == *"ТЕСТЫ-ПОШЛИ"* ]] && R=да || R=нет
+check "зелёный скан пускает к тестам" "$R" да
+
+# Конфиг возвращаем: дальше по нему проверяют сенсор, гейт и smoke.
+sed -i '' 's|^SECRET_SCAN_CMD=.*|SECRET_SCAN_CMD=""|' "$P/.harness.conf"
+sed -i '' 's|^GATE_CMD=.*|GATE_CMD="uv run ruff check . \&\& uv run ruff format --check ."|' "$P/.harness.conf"
+sed -i '' 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="uv run pytest"|' "$P/.harness.conf"
+
 echo "== SessionStart: фаза работы и личный слой =="
 
 [[ -x "$P/scripts/load-context.sh" ]] && R=yes || R=no

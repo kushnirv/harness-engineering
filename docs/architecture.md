@@ -114,6 +114,7 @@ harness-template/
 │   │   │   ├── block-zones.sh      ← guard: читает READONLY_ZONES
 │   │   │   ├── run-test-hook.sh    ← sensor: WATCH_DIR + TEST_CMD (пофайлово)
 │   │   │   ├── gate.sh             ← gate Ярус 2: GATE_CMD без тестов (Stop + база pre-push, loop-safe)
+│   │   │   ├── pre-push.sh         ← Ярус 3: gate + SECRET_SCAN_CMD + GATE_TEST_CMD (включает git-хук)
 │   │   │   └── nudge.sh            ← nudge: UserPromptSubmit, boundary→verify-напоминание (exit 0, не блокирует)
 │   │   ├── skills/                 ← команды (текущий стандарт)
 │   │   │   ├── note/               ← /note: capture в PENDING-NOTES.md

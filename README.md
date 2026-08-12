@@ -37,10 +37,14 @@ chmod +x .claude/guards/*.sh .claude/skills/note/append.sh
 # 4. Создай CLAUDE.md из шаблона и замени плейсхолдеры
 cp skeleton/CLAUDE.md.template CLAUDE.md
 
-# 5. (Node) git-side gate на pre-push через husky
-cp skeleton/.husky/pre-push .husky/pre-push && chmod +x .husky/pre-push
+# 5. Ярус 3 на pre-push. Логика — в .claude/guards/pre-push.sh (gate + секрет-скан +
+#    полные тесты), она приезжает вместе с харнессом. Включить нужно локально:
+printf '#!/usr/bin/env sh\nsh "$(git rev-parse --show-toplevel)/.claude/guards/pre-push.sh"\n' \
+  > .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+#    bootstrap.sh делает этот шаг сам. Любой стек, npm не нужен.
+#    (Node, если шарите хуки через package.json) вместо этого — husky:
+#    cp skeleton/.husky/pre-push .husky/pre-push && chmod +x .husky/pre-push
 #    package.json: "prepare": "husky || true"   (|| true чтобы CI не падал)
-#    не-Node стек: повесь .claude/guards/gate.sh на pre-push вручную
 
 # (опц.) языковой пакет под свой стек
 cp -r skeleton/lang-packs/vue/skills/* .claude/skills/
