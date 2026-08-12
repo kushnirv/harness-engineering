@@ -4,7 +4,11 @@
 # `verify-bootstrap.sh` гоняет только bootstrap-канал, и это стоило пяти битых ссылок:
 # `_exclude: scripts` резал каталог у copier-инстансов, а самопроверка была зелёной.
 # Источник истины — CORE_PATHS: файл объявлен CORE → оба канала обязаны его привезти.
-# Рендерим одноразовый клон дерева, а не HEAD: `--vcs-ref HEAD` не видит незакоммиченное.
+#
+# `--vcs-ref HEAD` обязателен: без него Copier для git-шаблона рендерит последний ТЕГ, и
+# проверка отчитывалась бы о состоянии полугодовой давности. С флагом берётся рабочее дерево,
+# включая незакоммиченное (проверено прогоном: untracked-файл в skeleton доезжает, а
+# незакоммиченное правило `_exclude` его отсекает).
 
 set -uo pipefail
 
@@ -31,21 +35,13 @@ command -v copier >/dev/null || {
 
 WORK="$(mktemp -d)"
 WORK="$(cd "$WORK" && pwd -P)"   # /var → /private/var на macOS, иначе пути расходятся строкой
-CLONE="$WORK/tpl"
 OUT="$WORK/rendered"
-mkdir -p "$CLONE"
 
 echo "== Рендер рабочего дерева Copier'ом =="
 
-tar cf - -C "$TPL" --exclude='.git' . 2>/dev/null | (cd "$CLONE" && tar xf -)
-(
-  cd "$CLONE" || exit 1
-  git init -q .
-  git add -A
-  git -c user.email=verify@local -c user.name=verify commit -qm "verify-copier snapshot"
-) >/dev/null 2>&1
-
-(cd "$CLONE" && copier copy --trust --defaults --overwrite --vcs-ref HEAD \
+# project_name обязателен: без него copier падает с `Question "project_name" is required`,
+# каталог не создаётся, и подавленный вывод читается как «рендер прошёл, файлов нет».
+(cd "$TPL" && copier copy --trust --defaults --overwrite --vcs-ref HEAD \
   --data project_name=probe --data lang=vue . "$OUT") >/dev/null 2>&1
 RENDER_RC=$?
 
