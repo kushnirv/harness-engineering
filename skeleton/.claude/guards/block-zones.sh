@@ -17,7 +17,7 @@ READONLY_ZONES="${READONLY_ZONES:-dist}"
 export HOOK_INPUT
 HOOK_INPUT="$(cat || true)"
 
-[[ -z "${HOOK_INPUT// }" ]] && exit 0
+[[ "$HOOK_INPUT" =~ ^[[:space:]]*$ ]] && exit 0
 
 # Recursive walk: ищем file_path в любом месте JSON
 TARGET_FILE="$(python3 <<'PY'

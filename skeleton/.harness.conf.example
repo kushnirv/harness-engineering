@@ -10,8 +10,10 @@
 WATCH_DIR="src"
 
 # Команда запуска тестов. Должна принимать список файлов как аргументы.
-# Пример: "vitest related --run" или "jest --testPathPattern"
-TEST_CMD="vitest related --run"
+# ВАЖНО: локальные JS-бинари (vitest/jest) — через `npx` / `pnpm exec`, иначе хук их не найдёт:
+# PostToolUse запускается без node_modules/.bin в PATH → `command not found` → ложный «Tests FAILED».
+# Пример: "npx vitest related --run" · "npx jest --testPathPattern" · "uv run pytest -q"
+TEST_CMD="npx vitest related --run"
 
 # --- Guard ---
 
@@ -25,6 +27,9 @@ READONLY_ZONES="dist"
 # Ярус 2 (Stop hook + база pre-push): repo-wide проверка БЕЗ полных тестов.
 # Sensor пофайловый — он не ловит type-ошибки по проекту, линт, сборку и
 # поломки конфигов. Gate ловит. Пусто → fail-open (gate выключен).
+# ВАЖНО: пустой GATE_CMD при СУЩЕСТВУЮЩЕМ .harness.conf gate печатает строкой в stderr
+# (и в systemMessage на Stop). «Харнесс не настроен» молчит законно, «гейт вычищен при
+# настроенном харнессе» — нет: молчаливый зелёный там неотличим от пройденной проверки.
 # Тестов тут нет намеренно: полный прогон медленный для каждого хода агента,
 # на Stop их закрывает sensor (TEST_CMD пофайлово). Примеры:
 #   turbo:  "turbo type-check lint build"
@@ -47,7 +52,7 @@ GATE_WORKDIR=""
 
 # Путь к долгосрочной памяти проекта в TechWiki (или другой вики).
 # Используется в load-context.sh (SessionStart) и end-session.md.
-# Пример: "/Users/shumik/Desktop/TechWiki/wiki/projects/ui-kit-harness"
+# Пример: "$HOME/wiki/projects/<имя-проекта>-harness" (абсолютный путь, без ~ внутри кавычек)
 WIKI_PATH=""
 
 # --- Harness version ---

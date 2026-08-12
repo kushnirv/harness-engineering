@@ -12,14 +12,17 @@
 #   husky pre-push / руками — без stdin. exit != 0 → push блокируется.
 #
 # Конфиг (.harness.conf):
-#   GATE_CMD     — проверка без тестов (напр. "turbo type-check lint build"). Пусто → fail-open.
+#   GATE_CMD     — проверка без тестов (напр. "turbo type-check lint build"). Пусто → fail-open,
+#                  но при СУЩЕСТВУЮЩЕМ .harness.conf ещё и строка в stderr: пустая команда
+#                  при заполненном конфиге — выключенный гейт, а не «харнесс не настроен».
 #   GATE_WORKDIR — откуда запускать (по умолчанию REPO_ROOT).
 
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 CONF="${REPO_ROOT}/.harness.conf"
-[[ -f "$CONF" ]] && source "$CONF"
+CONF_FOUND=no
+[[ -f "$CONF" ]] && { source "$CONF"; CONF_FOUND=yes; }
 
 GATE_CMD="${GATE_CMD:-}"
 GATE_WORKDIR="${GATE_WORKDIR:-}"
@@ -30,7 +33,7 @@ HOOK_INPUT="$(cat 2>/dev/null || true)"
 
 # Защита от петли: если агент уже в forced-continuation после нашего же блока —
 # второй раз не блокируем, иначе бесконечный цикл (см. gotcha про Stop).
-if [[ -n "${HOOK_INPUT// }" ]]; then
+if [[ ! "$HOOK_INPUT" =~ ^[[:space:]]*$ ]]; then
   STOP_ACTIVE="$(printf '%s' "$HOOK_INPUT" | python3 -c "
 import json, sys
 try:
@@ -41,8 +44,53 @@ except Exception:
   [[ "$STOP_ACTIVE" == "True" ]] && exit 0
 fi
 
-# Fail-open: gate не настроен → молчим (как sensor без TEST_CMD).
-[[ -z "${GATE_CMD// }" ]] && exit 0
+# Fail-open, но НЕ одинаково молча. Два разных случая:
+#   .harness.conf нет           → харнесс не настроен, это законно → тихий exit 0;
+#   .harness.conf есть, CMD пуст→ гейт выключен втихую → говорим одной строкой.
+# Второй случай раньше давал такой же молчаливый зелёный, как первый.
+if [[ "$GATE_CMD" =~ ^[[:space:]]*$ ]]; then
+  if [[ "$CONF_FOUND" == yes ]]; then
+    OFF="GATE_CMD в .harness.conf пуст — Ярус 2 не проверяет ничего (type-check/lint/build)."
+    echo "HARNESS: ${OFF}" >&2
+    # Как Stop-hook мы выходим с 0, а stderr при exit 0 пользователю не показывают —
+    # дублируем в systemMessage (та же причина, что в блоке WARN ниже).
+    if [[ ! "$HOOK_INPUT" =~ ^[[:space:]]*$ ]]; then
+      OFF="$OFF" python3 -c 'import json, os; print(json.dumps({"systemMessage": "HARNESS: " + os.environ["OFF"]}, ensure_ascii=False))' 2>/dev/null || true
+    fi
+  fi
+  exit 0
+fi
+
+# --- Дрейф среды: ПРЕДУПРЕЖДЕНИЕ, не блок ------------------------------------
+# Зелёный gate на чужой среде — ложная уверенность, красный на исправном коде —
+# остановленная работа. Второе дороже, поэтому расхождения печатаем и идём дальше.
+WARN=""
+
+if [[ -f "${REPO_ROOT}/.nvmrc" ]] && command -v node >/dev/null 2>&1; then
+  WANT="$(tr -d ' \t\rv\n' < "${REPO_ROOT}/.nvmrc")"
+  HAVE="$(node -v | tr -d 'v')"
+  # Сравнение по МАЖОРУ: патч-дрейф (локально 24.18, в CI 24.13) ничего не ломает,
+  # а предупреждение на каждый Stop обесценивается шумом.
+  if [[ -n "$WANT" && "${HAVE%%.*}" != "${WANT%%.*}" ]]; then
+    WARN+="gate гоняется на Node ${HAVE}, .nvmrc ожидает ${WANT} — расхождение с CI. "
+  fi
+fi
+
+# node_modules старее lock-файла → проверка судит о состоянии, которого нет.
+if [[ -f "${REPO_ROOT}/package-lock.json" \
+   && -f "${REPO_ROOT}/node_modules/.package-lock.json" \
+   && "${REPO_ROOT}/package-lock.json" -nt "${REPO_ROOT}/node_modules/.package-lock.json" ]]; then
+  WARN+="package-lock.json новее установленных зависимостей — нужен npm ci, gate может врать. "
+fi
+
+if [[ -n "$WARN" ]]; then
+  echo "HARNESS WARNING: ${WARN}" >&2
+  # Как Stop-hook мы выходим с 0, а stderr при exit 0 пользователю не показывают —
+  # дублируем в systemMessage. Без stdin (husky/руками) хватает stderr выше.
+  if [[ ! "$HOOK_INPUT" =~ ^[[:space:]]*$ ]]; then
+    WARN="$WARN" python3 -c 'import json, os; print(json.dumps({"systemMessage": "HARNESS WARNING: " + os.environ["WARN"]}, ensure_ascii=False))' 2>/dev/null || true
+  fi
+fi
 
 if [[ -n "$GATE_WORKDIR" ]]; then
   cd "${REPO_ROOT}/${GATE_WORKDIR}"

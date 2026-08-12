@@ -22,7 +22,7 @@ TEST_WORKDIR="${TEST_WORKDIR:-}"
 export HOOK_INPUT
 HOOK_INPUT="$(cat || true)"
 
-[[ -z "${HOOK_INPUT// }" ]] && exit 0
+[[ "$HOOK_INPUT" =~ ^[[:space:]]*$ ]] && exit 0
 
 CHANGED_FILE="$(python3 <<'PY'
 import json, os

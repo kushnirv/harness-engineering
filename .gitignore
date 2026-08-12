@@ -27,3 +27,9 @@ node_modules/
 /docs/plans/
 /docs/specs/
 /skeleton/.claude/rules/lang/md-libs.md
+# Ресёрч и факт-чеки под план — провенанс решений, нужен локально, потребителю нет.
+# Именно они цитируют номера ADR и плейсхолдеры, из-за чего проверка ADR требует
+# --exclude-dir=reports (см. docs/plans/, единица Е6).
+/reports/
+# Мультирепный план подъёма в инстанс — операционка, живёт вне /docs/plans/ по истории.
+/docs/plan-contribute-fenris-2026-07-14.md
