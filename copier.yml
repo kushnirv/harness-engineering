@@ -9,9 +9,9 @@ _exclude:
   # Non-CORE skeleton files — template scaffolding
   - "*.template"
   - "lang-packs"
-  - "scripts"
+  # `scripts` целиком исключать нельзя: log-append / check-ac-refs / load-context — CORE,
+  # на них ссылаются правила и settings.json. Глухое исключение давало пять битых ссылок.
   - ".husky"
-  - ".cursor"
   - ".harness.conf.example"
 
   # Non-CORE .claude subdirs

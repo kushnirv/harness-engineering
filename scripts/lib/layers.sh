@@ -16,5 +16,10 @@ CORE_PATHS=(
   ".claude/rules/common/workflow.md"
   ".claude/rules/common/methodology-routing.md"
   ".claude/rules/common/context-hygiene.md"
+  ".claude/rules/common/comments.md"
   "docs/specs/_template.md"
+  # Скрипты, на которые ссылаются правила и settings.json.
+  "scripts/log-append.sh"
+  "scripts/check-ac-refs.sh"
+  "scripts/load-context.sh"
 )

@@ -48,6 +48,9 @@ case "$LANG_PACK" in
     BUILD_TOOL="uv"
     TEST_FW="pytest"
     OTHER_TOOLS="ruff (lint + format)"
+    AC_GLOBS="test_*.py *_test.py"
+    # Тесты у python-инстанса лежат в tests/, а не в WATCH_DIR — искать ссылки надо там.
+    AC_DIR="tests"
     ;;
   vue|go|php|none)
     git init -q .
@@ -62,11 +65,22 @@ case "$LANG_PACK" in
     BUILD_TOOL="npm"
     TEST_FW="vitest"
     OTHER_TOOLS="eslint"
+    # Оба расширения: часть тестов лежит в .tsx, и маска только по .ts молча теряла бы их.
+    AC_GLOBS="*.test.ts *.test.tsx *.spec.ts"
+    # У JS-стека тесты лежат рядом с кодом, поэтому каталог тот же, что WATCH_DIR.
+    AC_DIR="src"
     ;;
   *)
     echo "неизвестный lang: $LANG_PACK (python|vue|go|php|none)" >&2
     exit 1
     ;;
+esac
+
+# go/php делят ветку с vue (своих паков нет), но маски тестов нужны свои: JS-маски дают ноль
+# файлов, и сверка AC уходит в fail-open при «заполненном» конфиге.
+case "$LANG_PACK" in
+  go)  AC_GLOBS="*_test.go";  AC_DIR="" ;;   # тесты рядом с кодом по всему модулю
+  php) AC_GLOBS="*Test.php";  AC_DIR="tests" ;;
 esac
 
 # Поля, которые до постановки задачи неизвестны, получают честный маркер, а не
@@ -191,33 +205,20 @@ READONLY_ZONES="$READONLY"
 GATE_CMD="$GATE_CMD"
 GATE_TEST_CMD="$GATE_TEST_CMD"
 GATE_WORKDIR=""
-WIKI_PATH=""
+# WIKI_PATH тут нет: файл версионируется, адрес вики личный. Личный слой —
+# ~/.harness/<имя-каталога-репо>.conf, load-context.sh читает его после этого файла.
+# Сверка «критерий приёмки ↔ тест» (scripts/check-ac-refs.sh). ID из чекбоксов секции
+# Verification спеки обязан встречаться хотя бы в одном тесте. Пустой AC_TEST_GLOBS →
+# проверка молчит и не работает: маски тестов зависят от стека, дефолта на все языки нет.
+AC_ID_RE="AC-[0-9]+"
+AC_TEST_GLOBS="$AC_GLOBS"
+AC_TEST_DIR="\$REPO_ROOT${AC_DIR:+/$AC_DIR}"
 CONF
 
-# settings.json.template подключает SessionStart → scripts/load-context.sh, но папка
-# scripts в copier _exclude — в инстансе файла нет, и каждый старт сессии пишет ошибку
-# в stderr, создавая впечатление, что контекст загружен. Генерируем минимальный.
+# Копия из skeleton, не heredoc: генерация давала второй скрипт под тем же именем, и
+# SessionStart делал разное в зависимости от канала доставки.
 mkdir -p scripts
-cat > scripts/load-context.sh <<'CTX'
-#!/usr/bin/env bash
-# SessionStart: показать агенту, на какой фазе работа. Вывод уходит в его контекст.
-set -uo pipefail
-
-ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
-SPECS=$(ls "$ROOT"/docs/specs/spec-*.md 2>/dev/null)
-
-if [[ -z "$SPECS" ]]; then
-  echo "Спеки среза нет. Первый шаг — копия docs/specs/_template.md → spec-<дата>-<срез>.md."
-  echo "Пока нет файла спеки с заполненными AC — код не начинаем."
-  exit 0
-fi
-
-echo "Активные спеки:"
-while IFS= read -r f; do
-  OPEN=$(grep -c '^- \[ \]' "$f" 2>/dev/null || true)
-  echo "  $(basename "$f") — незакрытых галок: ${OPEN:-0}"
-done <<< "$SPECS"
-CTX
+cp "$TPL/skeleton/scripts/load-context.sh" scripts/load-context.sh
 chmod +x scripts/load-context.sh
 
 # log-append.sh копируем из skeleton, а не генерируем heredoc'ом: правило в
@@ -225,6 +226,14 @@ chmod +x scripts/load-context.sh
 # для лога. Без файла правило неисполнимо — потребитель получал бы запрет без замены.
 cp "$TPL/skeleton/scripts/log-append.sh" scripts/log-append.sh
 chmod +x scripts/log-append.sh
+
+# check-ac-refs.sh: на него ссылается шаблон спеки (docs/specs/_template.md). Без файла
+# ссылка была бы битой — тот самый класс дефекта, из-за которого правила врали потребителю.
+cp "$TPL/skeleton/scripts/check-ac-refs.sh" scripts/check-ac-refs.sh
+chmod +x scripts/check-ac-refs.sh
+# Порог ratchet: на свежем инстансе спек нет, непокрытых нуль — порог 0 честен.
+# Без файла скрипт считает порогом 0 и предупреждает; лучше создать явно.
+echo 0 > scripts/check-ac-refs.baseline
 
 if [[ "$LANG_PACK" == python ]]; then
   mkdir -p tests

@@ -92,6 +92,94 @@ check "новая запись легла сверху" "$R" yes
 (cd "$P" && : > .empty-entry.md && bash scripts/log-append.sh .empty-entry.md >/dev/null 2>&1) && R=прошло || R=отказ
 check "пустая запись отклонена" "$R" отказ
 
+# --- Сверка AC ↔ тест -----------------------------------------------------------
+# На шаблон спеки ссылается docs/specs/_template.md, поэтому скрипт обязан доехать.
+[[ -x "$P/scripts/check-ac-refs.sh" ]] && R=yes || R=no
+check "check-ac-refs.sh доставлен и исполняем" "$R" yes
+
+[[ -f "$P/scripts/check-ac-refs.baseline" ]] && R=yes || R=no
+check "baseline порога создан" "$R" yes
+
+grep -q '^AC_TEST_GLOBS="[^"]\+"' "$P/.harness.conf" 2>/dev/null && R=yes || R=no
+check "AC_TEST_GLOBS заполнен под стек" "$R" yes
+
+# Свежий инстанс: спек нет → судить не о чем, обязан быть тихий успех.
+(cd "$P" && bash scripts/check-ac-refs.sh --quiet >/dev/null 2>&1) && R=0 || R=не0
+check "без спек проверка не падает" "$R" 0
+
+# Спека с критерием, теста нет → обязан упасть. Это и есть та дыра, ради которой скрипт.
+mkdir -p "$P/docs/specs"
+printf '# Спека: проба\n\n## Verification (AC)\n\n- [ ] **AC-001** — критерий без теста\n' \
+  > "$P/docs/specs/spec-probe.md"
+(cd "$P" && bash scripts/check-ac-refs.sh --quiet >/dev/null 2>&1) && R=прошло || R=упало
+check "AC без теста ловится" "$R" упало
+
+# Ссылка из теста появилась → обязан пройти. Каталог и маску берём из .harness.conf,
+# иначе проверка молча разошлась бы с тем, что реально настроено в инстансе.
+AC_DIR_CONF=$(grep '^AC_TEST_DIR=' "$P/.harness.conf" | sed 's/^AC_TEST_DIR="//; s/"$//; s|\$REPO_ROOT|'"$P"'|')
+AC_GLOB_ONE=$(grep '^AC_TEST_GLOBS=' "$P/.harness.conf" | sed 's/^AC_TEST_GLOBS="//; s/"$//' | awk '{print $1}')
+mkdir -p "$AC_DIR_CONF"
+AC_PROBE_FILE="$AC_DIR_CONF/${AC_GLOB_ONE//\*/ac_probe}"
+
+# Регресс на глоббинг: без noglob маска схлопывается в имя файла из корня, find пуст,
+# проверка уходит в fail-open. Кейс различающий: AC есть, теста нет → обязано УПАСТЬ.
+DECOY="$P/${AC_GLOB_ONE//\*/decoy}"
+: > "$DECOY"
+(cd "$P" && bash scripts/check-ac-refs.sh --quiet >/dev/null 2>&1) && R=прошло || R=упало
+check "маска не схлопывается в файл из корня" "$R" упало
+rm -f "$DECOY"
+# Контент — КОММЕНТАРИЙ: `#` валиден и в .py, и в .ts. Голый текст сделал бы файл
+# несобираемым, и следующая проверка (smoke-тест инстанса) упала бы из-за этой пробы.
+printf '# AC-001 — ссылка из теста для verify-bootstrap\n' > "$AC_PROBE_FILE"
+(cd "$P" && bash scripts/check-ac-refs.sh --quiet >/dev/null 2>&1) && R=прошло || R=упало
+check "AC со ссылкой из теста проходит" "$R" прошло
+
+# ID вне секции Verification критерием не считается — иначе любое упоминание требовало теста.
+# AC-777 кладём ИМЕННО ЧЕКБОКСОМ и в другую секцию: обычным текстом проверка декоративна —
+# мутация показала, что на сломанном разборе секций она не краснеет (ID вне чекбокса
+# не берётся и так).
+printf '\n## Изменения\n\n- [ ] **AC-777** — пункт изменений, не критерий приёмки\n' \
+  >> "$P/docs/specs/spec-probe.md"
+(cd "$P" && bash scripts/check-ac-refs.sh --quiet >/dev/null 2>&1) && R=прошло || R=упало
+check "ID вне секции Verification не считается" "$R" прошло
+
+# Прибираем пробы: инстанс проверяют дальше (smoke-тест, гейт), и наши файлы не должны
+# в этом участвовать. Проверка, которая пачкает объект проверки, врёт о следующих шагах.
+echo "== SessionStart: фаза работы и личный слой =="
+
+[[ -x "$P/scripts/load-context.sh" ]] && R=yes || R=no
+check "load-context.sh доставлен и исполняем" "$R" yes
+
+# Вывод забираем в переменную, а не через `| grep -q`: grep закрывает пайп на первом
+# совпадении, писатель получает SIGPIPE, и pipefail красит конвейер — проверка провалилась бы
+# на исправном скрипте.
+#
+# Спека на месте (создана выше) — хук обязан её увидеть. Раньше корень считался как
+# `dirname/../..`, уводил выше репо, и хук молча не находил ни спек, ни конфига.
+LC_OUT="$(cd "$P" && bash scripts/load-context.sh 2>/dev/null)"
+[[ "$LC_OUT" == *"spec-probe.md"* ]] && R=yes || R=no
+check "видит активную спеку" "$R" yes
+
+# Личный слой: адрес вики приходит ИЗ-ВНЕ репозитория, командный конфиг о нём не знает.
+LOCAL_CONF="$P/../local-probe.conf"
+mkdir -p "$P/../wiki-probe"
+printf '# overview-проба\n' > "$P/../wiki-probe/overview.md"
+printf 'WIKI_PATH="%s"\n' "$P/../wiki-probe" > "$LOCAL_CONF"
+LC_OUT="$(cd "$P" && HARNESS_LOCAL_CONF="$LOCAL_CONF" bash scripts/load-context.sh 2>/dev/null)"
+[[ "$LC_OUT" == *"overview-проба"* ]] && R=yes || R=no
+check "вика грузится из личного конфига" "$R" yes
+
+# Тот же прогон без личного конфига обязан молчать про вику, иначе слой не изолирован.
+LC_OUT="$(cd "$P" && HARNESS_LOCAL_CONF="$P/../нет-такого.conf" bash scripts/load-context.sh 2>/dev/null)"
+[[ "$LC_OUT" == *"Долгая память"* ]] && R=печатает || R=молчит
+check "без личного конфига про вику молчит" "$R" молчит
+
+grep -q '^WIKI_PATH=' "$P/.harness.conf" && R=есть || R=нет
+check "WIKI_PATH не попал в командный конфиг" "$R" нет
+
+rm -rf "$LOCAL_CONF" "$P/../wiki-probe"
+rm -f "$AC_PROBE_FILE" "$P/docs/specs/spec-probe.md"
+
 (cd "$P" && uv run pytest -q >/dev/null 2>&1) && R=green || R=red
 check "smoke-тест зелёный" "$R" green
 
