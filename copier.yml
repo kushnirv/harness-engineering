@@ -17,8 +17,10 @@ _exclude:
   # Non-CORE .claude subdirs
   - ".claude/docs"
   - ".claude/settings.json.template"
-  # Роли-агенты — instance-owned scaffold (инстанс кастомизирует под свой стек/KB,
-  # fenris это доказал). Раскатка при init, обновления метода НЕ форсятся сверху.
+  # Роли-агенты — instance-owned scaffold (ADR-13). Copier их НЕ доставляет ни при init,
+  # ни при update: раскатка только явным флагом `bootstrap.sh <имя> <lang> --agents`.
+  # Причина — агент завязан на стек и базу знаний проекта (fenris это доказал),
+  # форс-синк ломал бы инстанс, а пустой плейсхолдер в каждом репо вреднее явного принятия.
   - ".claude/agents"
 
   # run-pytest-hook — Python-LANG sensor: доставляем ТОЛЬКО при lang=python (как lang-файлы ниже),

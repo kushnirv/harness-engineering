@@ -16,4 +16,5 @@ CORE_PATHS=(
   ".claude/rules/common/workflow.md"
   ".claude/rules/common/methodology-routing.md"
   ".claude/rules/common/context-hygiene.md"
+  "docs/specs/_template.md"
 )

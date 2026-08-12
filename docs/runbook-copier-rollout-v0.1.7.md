@@ -7,6 +7,24 @@
 
 Шаблон: `/Users/shumik/Desktop/space307/harness-template`, тег `v0.1.7`.
 
+## ⚠️ PREFLIGHT (обязательно перед ЛЮБЫМ copier update)
+
+**Проверить, не gitignored ли `.claude/` в инстансе:**
+```bash
+git check-ignore .claude/guards/block-zones.sh && echo "GITIGNORED — НЕ делать copier update!"
+```
+`copier update` git-based: если `.claude/` в `.gitignore`, файлы для него невидимы → его
+git-операции **сносят весь управляемый `.claude/`** (guards, rules, skeleton-скилы). Подтверждено
+на turbo-omni 23.06 (abdulpay с tracked `.claude/` прошёл чисто — решающий контраст).
+
+**Если `.claude/` gitignored — два пути (рекомендуется первый):**
+1. **Снять `.claude/` из `.gitignore` инстанса** (un-gitignore harness-файлы). Тогда harness
+   версионируется + коммитится + `copier update` работает штатно. Иначе harness вечно
+   незакоммичен → свежий clone получает `_commit` без `.claude/` = сломанный инстанс.
+2. Стопгап без un-gitignore: `copier copy --overwrite --vcs-ref <tag>` вместо `update` —
+   регенерит ровно skeleton-файлы, не трогает не-skeleton (settings.json, CLAUDE.md, docs).
+   Но harness остаётся вне git.
+
 ## Цели этой раскатки
 
 | Репа | Состояние | Действие |
