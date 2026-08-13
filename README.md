@@ -2,9 +2,9 @@
 
 Language-agnostic шаблон харнесса для **Claude Code**.
 
-Харнесс = `CLAUDE.md` + хуки (guard / sensor / gate) + skills + path-scoped rules +
-связь с долгосрочной памятью. Ядро не зависит от стека: Vue, Go, PHP, бэкенд.
-Языковая специфика — отдельным слоем (`rules/lang/` + `lang-packs/`).
+Харнесс = `CLAUDE.md` + хуки на четырёх ярусах (pre-commit / sensor / gate / pre-push) + skills +
+path-scoped rules + связь с долгосрочной памятью. Ядро не зависит от стека: Vue, .NET, Go, PHP,
+python. Языковая специфика — отдельным слоем (`rules/lang/` + `lang-packs/`).
 
 ## Зачем
 
@@ -21,7 +21,22 @@ Language-agnostic шаблон харнесса для **Claude Code**.
 Это **supervised-харнесс** (человек на цикле), не автономный loop-runner.
 Набор сознательно MVP — «строй от отказов».
 
-## Setup (5 шагов)
+## Setup
+
+**Новый проект — одной командой.** Разворачивает каркас, ставит хуки, включает Ярус 3 и гоняет
+smoke сам:
+
+```bash
+mkdir -p myproj && cd myproj
+bash /path/to/harness-template/scripts/bootstrap.sh myproj dotnet
+# lang: python | vue | go | php | dotnet | none      (--agents — доставить роли субагентов)
+```
+
+Папка обязана быть пустой: скрипт откажется работать в непустой, чтобы `git init` не уехал
+в каталог с другими проектами.
+
+**Существующий проект — вручную, 5 шагов.** Bootstrap рассчитан на чистую раскатку, поверх
+живого репозитория его не гонять:
 
 ```bash
 # 1. Скопируй ядро в корень своего проекта
@@ -38,7 +53,8 @@ chmod +x .claude/guards/*.sh .claude/skills/note/append.sh
 cp skeleton/CLAUDE.md.template CLAUDE.md
 
 # 5. Ярус 3 на pre-push. Логика — в .claude/guards/pre-push.sh (gate + секрет-скан +
-#    полные тесты), она приезжает вместе с харнессом. Включить нужно локально:
+#    полные тесты + покрытие изменённых строк), она приезжает вместе с харнессом.
+#    Включить нужно локально:
 printf '#!/usr/bin/env sh\nsh "$(git rev-parse --show-toplevel)/.claude/guards/pre-push.sh"\n' \
   > .git/hooks/pre-push && chmod +x .git/hooks/pre-push
 #    bootstrap.sh делает этот шаг сам. Любой стек, npm не нужен.
@@ -64,7 +80,7 @@ gate, `/note`. Требует заполненного `.harness.conf` в про
 
 ## Что дальше
 
-- **Как устроено** — диаграммы, дерево, dual-tool, языковые слои, память,
+- **Как устроено** — диаграммы, дерево, четыре яруса проверок, языковые слои, память,
   capture-flow, Copier-sync → [docs/architecture.md](docs/architecture.md)
 - **Параметры конфига** — самодокументированы в
   [skeleton/.harness.conf.example](skeleton/.harness.conf.example)
