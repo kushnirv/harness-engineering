@@ -125,7 +125,7 @@ harness-template/
 │   │   ├── rules/                  ← common-core + per-language
 │   │   │   ├── common/             ← workflow, testing, git, methodology-routing,
 │   │   │   │                          context-hygiene, comments (всегда)
-│   │   │   └── lang/               ← vue.md, go.md, php.md (paths-scoped)
+│   │   │   └── lang/               ← vue.md, dotnet.md, go.md, php.md (paths-scoped)
 │   │   └── docs/                   ← проектная память (JIT)
 │   │       ├── ARCHITECTURE.md.template  ← generic
 │   │       ├── REVIEW.md.template        ← generic
@@ -140,7 +140,7 @@ harness-template/
 │   └── .harness.conf.example       ← все параметры с комментариями
 ├── examples/minimal/               ← рабочий минимальный пример
 ├── scripts/verify-harness.sh       ← smoke test инстанса (guard exit 2, sensor green, /note)
-├── scripts/verify-bootstrap.sh     ← самопроверка канала bootstrap (64 проверки)
+├── scripts/verify-bootstrap.sh     ← самопроверка канала bootstrap (71 проверка)
 ├── scripts/verify-copier.sh        ← самопроверка канала Copier (CORE_PATHS = источник истины)
 └── docs/specify-implement-review.md ← методология Specify → Implement → Review
 ```

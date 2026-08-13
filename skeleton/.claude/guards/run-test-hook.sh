@@ -16,8 +16,14 @@ CONF="${REPO_ROOT}/.harness.conf"
 [[ -f "$CONF" ]] && source "$CONF"
 
 WATCH_DIR="${WATCH_DIR:-src}"
-TEST_CMD="${TEST_CMD:-echo 'TEST_CMD not set'}"
 TEST_WORKDIR="${TEST_WORKDIR:-}"
+
+# Пустой TEST_CMD — законная конфигурация, а не забытая настройка: у некоторых стеков нет
+# пофайлового прогона (в .NET у `dotnet test` нет аналога "related tests"), и тесты там
+# закрывает Ярус 3. Раньше вместо пустой команды подставлялся `echo 'TEST_CMD not set'`:
+# он успешен, поэтому вывод глушился mute-the-green и в контекст не попадал — то есть хук
+# просто исполнял бессмысленную команду на каждой правке. Выходим сразу.
+[[ -z "${TEST_CMD:-}" ]] && exit 0
 
 export HOOK_INPUT
 HOOK_INPUT="$(cat || true)"

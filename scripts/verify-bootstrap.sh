@@ -345,6 +345,42 @@ set -e
 [[ $CODE -eq 0 && -z "$OUT" ]] && R=silent || R=noisy
 check "молчит при зелёном (mute the green)" "$R" silent
 
+echo "== .NET-инстанс =="
+
+# SDK у .NET-ветки намеренно не требуется: она кладёт каркас, solution заводит владелец.
+# Ветка, которую нельзя развернуть на машине без dotnet, была бы непроверяемой.
+PD="$(mktemp -d)"; PD="$(cd "$PD" && pwd -P)"
+(cd "$PD" && bash "$TPL/scripts/bootstrap.sh" probe dotnet >/dev/null 2>&1) && R=0 || R=не0
+check "разворот без установленного SDK" "$R" 0
+
+grep -q '^READONLY_ZONES=".*obj' "$PD/.harness.conf" 2>/dev/null && R=да || R=нет
+check "зоны .NET в конфиге (obj/artifacts)" "$R" да
+
+grep -q '^AC_TEST_GLOBS=".*Tests\.cs' "$PD/.harness.conf" 2>/dev/null && R=да || R=нет
+check "маски тестов .NET, не JS" "$R" да
+
+LANG_FILES="$(ls "$PD/.claude/rules/lang/" 2>/dev/null | tr '\n' ' ')"
+[[ "$LANG_FILES" == "dotnet.md " ]] && R=только-свой || R="$LANG_FILES"
+check "приехал только dotnet.md" "$R" только-свой
+
+# Пустой TEST_CMD у .NET законен. Сенсор обязан выйти, НЕ исполняя команду.
+# Проверка статическая и это не лень: успешная команда всё равно глушится mute-the-green,
+# поэтому по выводу два поведения неразличимы — мутация это показала.
+mkdir -p "$PD/src"; echo 'class X {}' > "$PD/src/X.cs"
+SENS_OUT="$(cd "$PD" && printf '{"tool_input":{"file_path":"%s/src/X.cs"}}' "$PD" | bash .claude/guards/run-test-hook.sh 2>&1)"
+[[ -z "$SENS_OUT" ]] && R=молчит || R="шумит: $SENS_OUT"
+check "сенсор молчит при пустом TEST_CMD" "$R" молчит
+
+grep -q 'z "${TEST_CMD:-}" \]\] && exit 0' "$PD/.claude/guards/run-test-hook.sh" && R=есть || R=нет
+check "ранний выход при пустом TEST_CMD в коде сенсора" "$R" есть
+
+# А вот пустой гейт молчать не должен: это не «нет пофайлового прогона», это «Ярус 2 выключен».
+GATE_OUT="$(cd "$PD" && bash .claude/guards/gate.sh </dev/null 2>&1)"
+[[ "$GATE_OUT" == *"GATE_CMD в .harness.conf пуст"* ]] && R=сказал || R=промолчал
+check "пустой гейт назван вслух" "$R" сказал
+
+rm -rf "$PD"
+
 echo "== Роли-агенты по флагу =="
 [[ -d "$P/.claude/agents" ]] && R=есть || R=нет
 check "без флага папки agents нет" "$R" нет

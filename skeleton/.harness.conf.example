@@ -98,7 +98,8 @@ AC_BASELINE_FILE="$REPO_ROOT/scripts/check-ac-refs.baseline"
 # --- Harness version ---
 
 # Реальная версия CORE — в `.copier-answers.yml` (её пишет Copier при copier copy/update).
-# Сверяй её с harness-template/VERSION для выявления отставания.
+# Отставание сверяется с git-тегом шаблона (`git -C <template> describe --tags`): отдельного
+# файла VERSION больше нет, он расходился с тегами.
 # Отдельного HARNESS_VERSION здесь намеренно НЕТ: дублирующее поле никто не читает
 # (harness-status.sh сверяет diff'ы файлов, не версию) и оно молча расходится с .copier-answers.yml.
 
@@ -123,3 +124,60 @@ REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 #   # RAG-проект: добавь генерируемые "chroma_db data"
 # GATE_CMD="uv run ruff check . && uv run ruff format --check . && uv run mypy ."
 # GATE_TEST_CMD="uv run pytest"        # полный прогон на pre-push (Ярус 3)
+
+# --- .NET preset (ASP.NET Core Web API, SDK 9/10) ---
+# Проверено факт-чеком по докам MS, исходникам SDK/MSBuild и спискам диагностик.
+#
+# WATCH_DIR="src"
+#
+# Сенсор пофайлово в .NET не работает: у `dotnet test` нет аналога "related tests",
+# прогон идёт проектом целиком. Пустой TEST_CMD = сенсора нет, тесты закрывает Ярус 3.
+# Замерь у себя: если полный прогон укладывается в пару секунд, поставь сюда команду
+# из GATE_TEST_CMD, иначе каждая правка будет стоить минуту ожидания.
+# TEST_CMD=""
+#
+# GATE_CMD="dotnet build App.sln -p:TreatWarningsAsErrors=true -p:EnforceCodeStyleInBuild=true -clp:ErrorsOnly -v:q --nologo"
+#   # Путь к solution ЯВНО: при двух файлах (.sln и .slnx) MSBuild отказывается выбирать (MSB1011).
+#   # TreatWarningsAsErrors — красит CS*, CA*, IDE*, NU*. НЕ покрывает MSB*/NETSDK*: ключ
+#   #   `-warnAsError` намеренно не ставим, он краснит гейт на средовом шуме (конфликты RAR)
+#   #   и не глушится через NoWarn по проектам.
+#   # Обратная сторона: под свойство попадают NuGetAudit NU1901–NU1904, поэтому новая CVE
+#   #   краснит гейт без правок кода. Глушить в csproj (WarningsNotAsErrors), не в команде.
+#   # EnforceCodeStyleInBuild — в CLI-сборке анализаторы стиля (IDE*) выключены по умолчанию.
+#   # -clp:ErrorsOnly режет видимость, не код выхода: без TreatWarningsAsErrors гейт зелёный.
+#   # -clp:NoSummary НЕ добавлять: gate.sh читает хвост вывода, а вердикт и счётчики
+#   #   «N Warning(s) / N Error(s)» печатаются в самом конце — NoSummary срезает ровно их.
+#   # --no-restore НЕ добавлять: без restore новый PackageReference не попадёт в ссылки —
+#   #   в лучшем случае CS0246, в худшем зелёная сборка со старыми зависимостями.
+#   # -m не нужен: `dotnet build` всегда сам добавляет беззначный -maxcpucount.
+#
+# GATE_TEST_CMD — три формы, выбирай по SDK и раннеру. Раннер переключается ТОЛЬКО через
+# global.json ({"test":{"runner":"Microsoft.Testing.Platform"}}), флага CLI нет; на SDK ≤ 9
+# секция игнорируется молча. `--no-build` уже включает `--no-restore`, дублировать не нужно,
+# но требует готовой сборки — билд идёт отдельным шагом до тестов.
+#   SDK ≥ 10 + MTP:  GATE_TEST_CMD="dotnet test --solution App.sln --no-build -- --ansi off --progress off"
+#   SDK 9 + MTP:     GATE_TEST_CMD="dotnet test App.sln --no-build"
+#                    # плюс <TestingPlatformDotnetTestSupport>true</...> в Directory.Build.props
+#   чистый VSTest:   GATE_TEST_CMD="dotnet test App.sln --no-build"
+#
+# АСИММЕТРИЯ КОДОВ ВЫХОДА — главный источник ложных вердиктов. Хуки считают провалом любой
+# не-нулевой код, а «ноль тестов» два раннера трактуют противоположно:
+#   прогнано ноль тестов → MTP отдаёт 8 (ложный КРАСНЫЙ), VSTest отдаёт 0 (ложный ЗЕЛЁНЫЙ)
+#   падения → MTP 2, VSTest 1 · невалидные аргументы → MTP 5, VSTest 1
+# Рычаги разные для сенсора и гейта:
+#   сенсор (MTP):  export TESTINGPLATFORM_EXITCODE_IGNORE=8   # ноль тестов перестаёт быть провалом
+#   гейт (MTP):    8 НЕ глушить, добавить `--minimum-expected-tests N` — пустой прогон падёт осознанно
+#   гейт (VSTest): RunConfiguration.TreatNoTestsAsError=true в .runsettings — иначе пустой прогон зелёный
+# Ложный зелёный дороже ложного красного: у VSTest эту строку в .runsettings ставить обязательно.
+#
+# Тишину вывода задавай ПЕРЕМЕННЫМИ, не флагами: неизвестная опция CLI роняет прогон с кодом 5,
+# неизвестная переменная просто игнорируется — конфиг переживает разброс версий SDK.
+# export MSBUILDTERMINALLOGGER=false   # не `-tl:false` в команде: флаг может уехать в тест-хост
+#
+# READONLY_ZONES="bin obj artifacts TestResults publish"
+#   # artifacts появляется при UseArtifactsOutput=true (.NET 8 SDK+) — тогда bin/obj уезжают внутрь.
+#   # `dotnet clean` не опустошает obj: выходы restore (project.assets.json, *.nuget.g.props)
+#   # остаются на месте, поэтому зона нужна именно как read-only, а не как «удаляемое».
+#
+# AC_TEST_GLOBS="*Tests.cs *Test.cs"
+# AC_TEST_DIR="$REPO_ROOT/tests"

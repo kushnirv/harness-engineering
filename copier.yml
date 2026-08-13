@@ -42,6 +42,7 @@ _exclude:
   - "{% if lang != 'go' %}.claude/rules/lang/go.md{% endif %}"
   - "{% if lang != 'php' %}.claude/rules/lang/php.md{% endif %}"
   - "{% if lang != 'python' %}.claude/rules/lang/python.md{% endif %}"
+  - "{% if lang != 'dotnet' %}.claude/rules/lang/dotnet.md{% endif %}"
 
 project_name:
   type: str
@@ -50,5 +51,5 @@ project_name:
 lang:
   type: str
   help: Языковой пак
-  choices: [vue, go, php, python, none]
+  choices: [vue, go, php, python, dotnet, none]
   default: vue

@@ -2,7 +2,7 @@
 # Разворот проекта с харнессом одной командой.
 # Прогон из целевой ПУСТОЙ папки:
 #   bash /path/to/harness-template/scripts/bootstrap.sh <имя> [lang]
-# lang: python | vue | go | php | none (по умолчанию python)
+# lang: python | vue | go | php | dotnet | none (по умолчанию python)
 #
 # Что делает: создаёт проект → зовёт copier с нужным языковым паком →
 # дорендеривает CLAUDE.md / settings.json / .harness.conf (copier их не привозит,
@@ -52,6 +52,30 @@ case "$LANG_PACK" in
     # Тесты у python-инстанса лежат в tests/, а не в WATCH_DIR — искать ссылки надо там.
     AC_DIR="tests"
     ;;
+  dotnet)
+    # SDK намеренно НЕ требуется: bootstrap кладёт каркас харнесса, а solution заводит владелец
+    # (`dotnet new sln` / `dotnet new webapi`). Требовать dotnet значило бы держать в шаблоне
+    # непроверяемую ветку — SDK есть далеко не на каждой машине, где правят шаблон.
+    git init -q .
+    WATCH_DIR="src"
+    # Пофайлового прогона в .NET нет: у `dotnet test` нет аналога "related tests". Сенсор
+    # молчит, тесты закрывает Ярус 3.
+    TEST_CMD=""
+    SENSOR="run-test-hook.sh"
+    READONLY="bin obj artifacts TestResults publish"
+    # Гейт и тесты пустые ОСОЗНАННО: команда требует пути к solution, которого на свежем
+    # инстансе нет. Строка с `App.sln` давала бы красный гейт на пустом месте. Пустой GATE_CMD
+    # при существующем конфиге gate называет вслух — ложного зелёного не будет.
+    GATE_CMD=""
+    GATE_TEST_CMD=""
+    PKG_PATH="src"
+    LANG_VER=".NET 9/10 · ASP.NET Core Web API"
+    BUILD_TOOL="dotnet"
+    TEST_FW="xunit / Microsoft.Testing.Platform"
+    OTHER_TOOLS="анализаторы SDK (CA/IDE), EnforceCodeStyleInBuild"
+    AC_GLOBS="*Tests.cs *Test.cs"
+    AC_DIR="tests"
+    ;;
   vue|go|php|none)
     git init -q .
     WATCH_DIR="src"
@@ -71,7 +95,7 @@ case "$LANG_PACK" in
     AC_DIR="src"
     ;;
   *)
-    echo "неизвестный lang: $LANG_PACK (python|vue|go|php|none)" >&2
+    echo "неизвестный lang: $LANG_PACK (python|vue|go|php|dotnet|none)" >&2
     exit 1
     ;;
 esac
