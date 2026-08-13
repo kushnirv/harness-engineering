@@ -140,7 +140,7 @@ harness-template/
 │   └── .harness.conf.example       ← все параметры с комментариями
 ├── examples/minimal/               ← рабочий минимальный пример
 ├── scripts/verify-harness.sh       ← smoke test инстанса (guard exit 2, sensor green, /note)
-├── scripts/verify-bootstrap.sh     ← самопроверка канала bootstrap (71 проверка)
+├── scripts/verify-bootstrap.sh     ← самопроверка канала bootstrap (73 проверки)
 ├── scripts/verify-copier.sh        ← самопроверка канала Copier (CORE_PATHS = источник истины)
 └── docs/specify-implement-review.md ← методология Specify → Implement → Review
 ```

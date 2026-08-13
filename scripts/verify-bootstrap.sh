@@ -392,10 +392,18 @@ PA="$(mktemp -d)"; PA="$(cd "$PA" && pwd -P)"
 # Найдено прогоном 30.07 — обрыв вывода без единого FAIL.
 AGENT_COUNT=$(ls -1 "$PA/.claude/agents/" 2>/dev/null | grep -c '\.md$' || true)
 # Семь, не пять: к пяти ролям из fenris в скелете уже лежали bug-triage (ADR-13) и README.
-check "с флагом --agents приехало 7 файлов ролей" "$AGENT_COUNT" 7
+check "с флагом --agents приехало 3 файла ролей" "$AGENT_COUNT" 3
 
-[[ -f "$PA/.claude/agents/reviewer.md" && -f "$PA/.claude/agents/scout.md" ]] && R=yes || R=no
-check "роли из fenris на месте (reviewer, scout)" "$R" yes
+# Уникальные роли на месте, core-ролей тут быть НЕ должно: их канон в плагине (ADR-14).
+[[ -f "$PA/.claude/agents/bug-triage.md" && -f "$PA/.claude/agents/Explore.md" ]] && R=yes || R=no
+check "уникальные роли на месте (bug-triage, Explore)" "$R" yes
+
+ls "$PA/.claude/agents/" 2>/dev/null | grep -qE '^(reviewer|scout|researcher|scribe)\.md$' && R=есть || R=нет
+check "дублей core-ролей в инстансе нет" "$R" нет
+
+# Explore переопределяет встроенный агент ради haiku — без этой строки смысл файла теряется.
+grep -q 'model: haiku' "$PA/.claude/agents/Explore.md" 2>/dev/null && R=да || R=нет
+check "Explore держит модель haiku" "$R" да
 
 echo "== Гард на непустую папку =="
 PB="$(mktemp -d)"; PB="$(cd "$PB" && pwd -P)"
