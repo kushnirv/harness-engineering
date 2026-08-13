@@ -240,6 +240,9 @@ SECRET_SCAN_CMD=""
 AC_ID_RE="AC-[0-9]+"
 AC_TEST_GLOBS="$AC_GLOBS"
 AC_TEST_DIR="\$REPO_ROOT${AC_DIR:+/$AC_DIR}"
+COVERAGE_REPORT=""
+DIFF_COVER_BASE=""
+DIFF_COVER_BASELINE="\$REPO_ROOT/scripts/check-diff-coverage.baseline"
 CONF
 
 # Копия из skeleton, не heredoc: генерация давала второй скрипт под тем же именем, и
@@ -261,6 +264,12 @@ chmod +x scripts/check-ac-refs.sh
 # Порог ratchet: на свежем инстансе спек нет, непокрытых нуль — порог 0 честен.
 # Без файла скрипт считает порогом 0 и предупреждает; лучше создать явно.
 echo 0 > scripts/check-ac-refs.baseline
+
+# Покрытие изменённых строк (Ярус 3). COVERAGE_REPORT пуст — проверка молчит, пока владелец не
+# настроит отчёт покрытия под свой стек.
+cp "$TPL/skeleton/scripts/check-diff-coverage.sh" scripts/check-diff-coverage.sh
+chmod +x scripts/check-diff-coverage.sh
+echo 0 > scripts/check-diff-coverage.baseline
 
 # Активация Яруса 3. Логика — в .claude/guards/pre-push.sh (версионируется, едет обоими
 # каналами), тут только включение: git-хук работает на любом стеке и не требует npm.

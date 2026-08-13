@@ -38,3 +38,9 @@ fi
 if [ -n "${GATE_TEST_CMD:-}" ]; then
   ( cd "$REPO_ROOT" && eval "$GATE_TEST_CMD" ) || exit 1
 fi
+
+# 4. Покрытие изменённых строк — ПОСЛЕ тестов: отчёт создают они.
+# Скрипт сам молчит, если COVERAGE_REPORT не задан или отчёта нет.
+if [ -x "${REPO_ROOT}/scripts/check-diff-coverage.sh" ]; then
+  bash "${REPO_ROOT}/scripts/check-diff-coverage.sh" --quiet </dev/null || exit 1
+fi

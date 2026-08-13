@@ -114,7 +114,7 @@ harness-template/
 │   │   │   ├── block-zones.sh      ← guard: читает READONLY_ZONES
 │   │   │   ├── run-test-hook.sh    ← sensor: WATCH_DIR + TEST_CMD (пофайлово)
 │   │   │   ├── gate.sh             ← gate Ярус 2: GATE_CMD без тестов (Stop + база pre-push, loop-safe)
-│   │   │   ├── pre-push.sh         ← Ярус 3: gate + SECRET_SCAN_CMD + GATE_TEST_CMD (включает git-хук)
+│   │   │   ├── pre-push.sh         ← Ярус 3: gate + секрет-скан + тесты + покрытие diff (включает git-хук)
 │   │   │   └── nudge.sh            ← nudge: UserPromptSubmit, boundary→verify-напоминание (exit 0, не блокирует)
 │   │   ├── skills/                 ← команды (текущий стандарт)
 │   │   │   ├── note/               ← /note: capture в PENDING-NOTES.md
@@ -136,11 +136,12 @@ harness-template/
 │   ├── scripts/                    ← CORE-скрипты, едут оба канала
 │   │   ├── load-context.sh         ← SessionStart: активные спеки + вика из личного конфига
 │   │   ├── log-append.sh           ← append записи в лог (не Edit: дифает файл целиком)
-│   │   └── check-ac-refs.sh        ← сверка «AC-ID ↔ ссылка из теста», ratchet-порог
+│   │   ├── check-ac-refs.sh        ← сверка «AC-ID ↔ ссылка из теста», ratchet-порог
+│   │   └── check-diff-coverage.sh   ← покрытие ИЗМЕНЁННЫХ строк, ratchet-порог
 │   └── .harness.conf.example       ← все параметры с комментариями
 ├── examples/minimal/               ← рабочий минимальный пример
 ├── scripts/verify-harness.sh       ← smoke test инстанса (guard exit 2, sensor green, /note)
-├── scripts/verify-bootstrap.sh     ← самопроверка канала bootstrap (73 проверки)
+├── scripts/verify-bootstrap.sh     ← самопроверка канала bootstrap (90 проверок)
 ├── scripts/verify-copier.sh        ← самопроверка канала Copier (CORE_PATHS = источник истины)
 └── docs/specify-implement-review.md ← методология Specify → Implement → Review
 ```

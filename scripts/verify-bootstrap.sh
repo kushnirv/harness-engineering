@@ -217,6 +217,61 @@ sed -i '' 's|^SECRET_SCAN_CMD=.*|SECRET_SCAN_CMD=""|' "$P/.harness.conf"
 sed -i '' 's|^GATE_CMD=.*|GATE_CMD="uv run ruff check . \&\& uv run ruff format --check ."|' "$P/.harness.conf"
 sed -i '' 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="uv run pytest"|' "$P/.harness.conf"
 
+echo "== Покрытие изменённых строк =="
+
+[[ -x "$P/scripts/check-diff-coverage.sh" ]] && R=yes || R=no
+check "check-diff-coverage доставлен и исполняем" "$R" yes
+
+[[ -f "$P/scripts/check-diff-coverage.baseline" ]] && R=yes || R=no
+check "порог покрытия создан" "$R" yes
+
+# Ненастроенность (COVERAGE_REPORT пуст) — тихий успех: отчёт покрытия зависит от стека,
+# честного дефолта нет. Но молчать нельзя, поэтому проверяем и текст предупреждения.
+DC_OUT="$( (cd "$P" && bash scripts/check-diff-coverage.sh) 2>&1 </dev/null )"
+DC_RC=$?
+[[ $DC_RC -eq 0 ]] && R=0 || R="$DC_RC"
+check "без COVERAGE_REPORT проверка не падает" "$R" 0
+
+[[ "$DC_OUT" == *"COVERAGE_REPORT не задан"* ]] && R=сказал || R=промолчал
+check "про ненастроенность покрытия сказано" "$R" сказал
+
+# Настоящий кейс: изменённая непокрытая строка при пороге 100 обязана уронить прогон.
+# Фикстура своя, чтобы не зависеть от стека инстанса.
+DCF="$P/../dc-probe"; rm -rf "$DCF"; mkdir -p "$DCF/src" "$DCF/scripts"
+cp "$P/scripts/check-diff-coverage.sh" "$DCF/scripts/"
+(
+  cd "$DCF" && git init -q . && git config user.email t@t && git config user.name t
+  printf 'def a():\n    return 1\n' > src/m.py
+  printf 'COVERAGE_REPORT="coverage.xml"\nDIFF_COVER_BASE="master"\n' > .harness.conf
+  echo 100 > scripts/check-diff-coverage.baseline
+  cat > coverage.xml <<'XML'
+<?xml version="1.0"?>
+<coverage><packages><package><classes>
+<class filename="src/m.py"><lines>
+<line number="1" hits="1"/><line number="2" hits="1"/><line number="4" hits="0"/>
+</lines></class>
+</classes></package></packages></coverage>
+XML
+  git add -A && git commit -qm base && git branch -M master
+  git checkout -q -b feat
+  printf 'def a():\n    return 1\n\ndef b():\n    return 2\n' > src/m.py
+  git add -A && git commit -qm feat
+) >/dev/null 2>&1
+( cd "$DCF" && CLAUDE_PROJECT_DIR="$DCF" bash scripts/check-diff-coverage.sh --quiet >/dev/null 2>&1 </dev/null ) && R=прошло || R=упало
+check "непокрытая изменённая строка роняет прогон" "$R" упало
+
+# Рефакторинг покрытых строк при том же пороге 100 обязан пройти — это и есть причина, по
+# которой считаем diff, а не пары «файл ↔ тест».
+(
+  cd "$DCF" && git checkout -q master && git checkout -q -b refactor
+  printf 'def alpha():\n    return 1\n' > src/m.py
+  git add -A && git commit -qm refactor
+) >/dev/null 2>&1
+( cd "$DCF" && CLAUDE_PROJECT_DIR="$DCF" bash scripts/check-diff-coverage.sh --quiet >/dev/null 2>&1 </dev/null ) && R=прошло || R=упало
+check "рефакторинг покрытых строк проходит при пороге 100" "$R" прошло
+
+rm -rf "$DCF"
+
 echo "== SessionStart: фаза работы и личный слой =="
 
 [[ -x "$P/scripts/load-context.sh" ]] && R=yes || R=no
