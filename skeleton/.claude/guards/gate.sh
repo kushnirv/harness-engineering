@@ -76,6 +76,21 @@ if [[ -f "${REPO_ROOT}/.nvmrc" ]] && command -v node >/dev/null 2>&1; then
   fi
 fi
 
+# Сверка «критерий приёмки ↔ тест»: сигнал ЗДЕСЬ, блокировка на Ярусе 3.
+# Блокировать на Stop нельзя — проверка краснела бы на том же ходе, где спека с новыми AC
+# написана, а тест по ней ещё нет, то есть наказывала бы за spec-first. Но узнавать о дыре
+# только на push поздно: между спекой и push помещается вся работа. Поэтому здесь — строка
+# предупреждения, в `pre-push.sh` — тот же скрипт с блокировкой.
+# Только как Stop-хук: pre-push зовёт gate.sh шагом 1 и сам же гоняет эту сверку шагом 3,
+# без условия сообщение печаталось бы дважды.
+if [[ ! "$HOOK_INPUT" =~ ^[[:space:]]*$ && -x "${REPO_ROOT}/scripts/check-ac-refs.sh" ]]; then
+  AC_OUT=""
+  AC_OUT="$(bash "${REPO_ROOT}/scripts/check-ac-refs.sh" --quiet 2>&1 </dev/null)" || true
+  # Первая строка вывода скрипта — итог вида «AC БЕЗ ТЕСТА: N при пороге M».
+  AC_FIRST="$(printf '%s' "$AC_OUT" | grep -m1 'AC БЕЗ ТЕСТА' || true)"
+  [[ -n "$AC_FIRST" ]] && WARN+="${AC_FIRST} Блокировать это будет pre-push, не сейчас. "
+fi
+
 # node_modules старее lock-файла → проверка судит о состоянии, которого нет.
 if [[ -f "${REPO_ROOT}/package-lock.json" \
    && -f "${REPO_ROOT}/node_modules/.package-lock.json" \

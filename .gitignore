@@ -33,3 +33,6 @@ node_modules/
 /reports/
 # Мультирепный план подъёма в инстанс — операционка, живёт вне /docs/plans/ по истории.
 /docs/plan-contribute-fenris-2026-07-14.md
+# Буфер /note этой репы — операционка, разбирается в /end-session и уезжает
+# в docs/plans/ (тоже игнор) или в вику. В публичном шаблоне ему делать нечего.
+/.claude/PENDING-NOTES.md

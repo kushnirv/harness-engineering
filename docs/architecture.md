@@ -12,8 +12,12 @@
 
 ## Версионируемый sync (Copier)
 
-CORE-слой (guards, skills/{plan,rename,note,end-session,task}, rules/common) синкается через
-[Copier](https://copier.readthedocs.io). Установка один раз:
+CORE-слой синкается через [Copier](https://copier.readthedocs.io): guards,
+skills/{plan,rename,note,end-session,task}, rules/common **и `scripts/` — четыре скрипта, на
+которые CORE-правила ссылаются напрямую**. Состав CORE задан списком `CORE_PATHS` в
+`scripts/lib/layers.sh`, он же источник истины для самопроверки обоих каналов.
+
+Установка один раз:
 
 ```bash
 brew install pipx && pipx ensurepath
@@ -26,7 +30,10 @@ pipx install copier
 
 **Обратный канал (инстанс → шаблон):** улучшение CORE, найденное в инстансе, поднимается
 `scripts/harness-contribute.sh <instance>` (копирует CORE-изменения + печатает diff; git/PR за
-человеком). Карта инстансов и их дрейфа — `REGISTRY.md`.
+человеком).
+
+Карту своих инстансов держи локально: она про чужие рабочие каталоги, в публичный шаблон такому
+не место (`/REGISTRY.md` в `.gitignore` — файл живёт у владельца, в клоне его нет).
 
 ## Почему скелет так устроен
 
@@ -70,6 +77,7 @@ flowchart TD
     H -->|нет| I["additionalContext: TEST FAILED"]
     H -->|да| J["тишина (mute the green)"]
     K["Stop (конец хода)"] --> L["gate.sh (repo-wide)"]
+    L --> L2["AC без теста → строка-предупреждение<br/>(не блокирует)"]
     L --> M{GATE_CMD успешен?}
     M -->|нет| N["GATE FAILED (exit 2): ход не завершить"]
     M -->|да| O["ход завершается"]
@@ -77,6 +85,15 @@ flowchart TD
     Q --> R{boundary-триггер?}
     R -->|да| S["additionalContext: объяви verify-уровень"]
     R -->|нет| T["тишина (exit 0)"]
+    U["git push"] --> V["pre-push.sh (Ярус 3)"]
+    V --> W["1. gate.sh"]
+    W --> X["2. SECRET_SCAN_CMD"]
+    X --> X2["3. check-ac-refs.sh (AC ↔ тест)"]
+    X2 --> Y["4. GATE_TEST_CMD (полные тесты)"]
+    Y --> Z["5. check-diff-coverage.sh (COVERAGE_REPORT)"]
+    Z --> AA{все пять прошли?}
+    AA -->|нет| AB["push отклонён (exit 1)"]
+    AA -->|да| AC["push уходит"]
     style E fill:#ffcccc
     style I fill:#ffcccc
     style J fill:#ccffcc
@@ -84,7 +101,30 @@ flowchart TD
     style O fill:#ccffcc
     style S fill:#fff0d0
     style T fill:#ccffcc
+    style AB fill:#ffcccc
+    style AC fill:#ccffcc
 ```
+
+**Порядок внутри Яруса 3 — от дешёвого к дорогому, покрытие последним:** отчёт покрытия создают
+тесты, до них его либо нет, либо он от прошлого прогона. Каждый пустой параметр
+(`SECRET_SCAN_CMD`, `GATE_TEST_CMD`) хук называет строкой в stderr: молчаливое отсутствие
+проверки неотличимо от пройденной.
+
+**Сверка AC работает на двух ярусах по-разному: сигнал рано, блокировка на месте.**
+
+На Stop (`gate.sh`) — строка предупреждения, ход не блокируется. Блокировать здесь нельзя:
+проверка краснела бы на том же ходе, где спека с новыми критериями написана, а тест по ней ещё
+нет, то есть наказывала бы за spec-first, которого сама требует.
+
+На pre-push (`pre-push.sh`, шаг 3) — тот же скрипт с блокировкой. Узнавать о дыре только на push
+поздно: между спекой и push помещается вся работа, поэтому предупреждение приходит на конце
+каждого хода.
+
+Дубля нет: gate печатает предупреждение только когда вызван как Stop-хук. Из pre-push он идёт
+шагом 1 без stdin и про AC молчит — блокирующий шаг там свой.
+
+Порог живёт в файле и двигается только вниз (ratchet): краснеет, когда несосланных стало БОЛЬШЕ
+порога, то есть дыру внёс этот заход.
 
 ### Ядро + языковые слои
 
@@ -93,10 +133,18 @@ flowchart LR
     A["rules/common/*"] --> C["агент: универсальные правила"]
     B["rules/lang/&lt;lang&gt;.md<br/>(paths-scoped)"] --> C
     D["lang-packs/&lt;lang&gt;/<br/>(skills, docs)"] -.->|"опц. наложить"| E["instance"]
+    A -.->|"гейт чистоты:<br/>стек-токен → сюда"| B
     style A fill:#e1f5ff
     style B fill:#fff0d0
     style D fill:#fff0d0
 ```
+
+**Границу держит `scripts/lint-core-purity.sh`, не дисциплина.** CORE несёт требование, языковой
+слой — инструмент. Пример: «фича по макету закрывается сверкой с макетом» живёт в
+`rules/common/workflow.md`, а чем сверять (Figma ↔ localhost, chrome-devtools MCP) — в
+`rules/lang/vue.md`, потому что доки под это приезжают только с lang-pack `vue` и
+бэкенд-инстанс их не получает вовсе. Порог линта — ноль: любая новая стек-специфика в CORE
+краснеет на первом же прогоне.
 
 ### Дерево
 
@@ -113,8 +161,9 @@ harness-template/
 │   │   ├── guards/
 │   │   │   ├── block-zones.sh      ← guard: читает READONLY_ZONES
 │   │   │   ├── run-test-hook.sh    ← sensor: WATCH_DIR + TEST_CMD (пофайлово)
+│   │   │   ├── run-pytest-hook.sh  ← sensor-вариант для python (PYTEST_MODE)
 │   │   │   ├── gate.sh             ← gate Ярус 2: GATE_CMD без тестов (Stop + база pre-push, loop-safe)
-│   │   │   ├── pre-push.sh         ← Ярус 3: gate + секрет-скан + тесты + покрытие diff (включает git-хук)
+│   │   │   ├── pre-push.sh         ← Ярус 3: gate + секрет-скан + сверка AC↔тест + тесты + покрытие diff
 │   │   │   └── nudge.sh            ← nudge: UserPromptSubmit, boundary→verify-напоминание (exit 0, не блокирует)
 │   │   ├── skills/                 ← команды (текущий стандарт)
 │   │   │   ├── note/               ← /note: capture в PENDING-NOTES.md
@@ -135,8 +184,10 @@ harness-template/
 │   │       ├── completion.md.template    ← онбординг + «понимаешь / на доверии»
 │   │       ├── background-offload.md.template ← что отдавать агентам
 │   │       └── testing-guide.md.template ← процедура мутации, хрупкость, reporter
-│   ├── lang-packs/                 ← языковые пакеты поверх ядра
-│   │   └── vue/                    ← add-component, dev-guide, Vue-ревью, FSD, макеты, real-runtime
+│   ├── lang-packs/                 ← языковые пакеты поверх ядра (копируются РУКАМИ,
+│   │   │                              bootstrap их не возит; в рендер Copier не попадают)
+│   │   ├── vue/                    ← add-component, dev-guide, Vue-ревью, FSD, макеты, real-runtime
+│   │   └── dotnet/                 ← .editorconfig с явной severity, чеклист ревью C#
 │   ├── scripts/                    ← CORE-скрипты, едут оба канала
 │   │   ├── load-context.sh         ← SessionStart: активные спеки + вика из личного конфига
 │   │   ├── log-append.sh           ← append записи в лог (не Edit: дифает файл целиком)
@@ -144,9 +195,17 @@ harness-template/
 │   │   └── check-diff-coverage.sh   ← покрытие ИЗМЕНЁННЫХ строк, ratchet-порог
 │   └── .harness.conf.example       ← все параметры с комментариями
 ├── examples/minimal/               ← рабочий минимальный пример
-├── scripts/verify-harness.sh       ← smoke test инстанса (guard exit 2, sensor green, /note)
-├── scripts/verify-bootstrap.sh     ← самопроверка канала bootstrap (90 проверок)
-├── scripts/verify-copier.sh        ← самопроверка канала Copier (CORE_PATHS = источник истины)
+├── scripts/
+│   ├── bootstrap.sh                ← раскатка инстанса: второй канал доставки, не только Copier
+│   ├── harness-status.sh           ← замер дрейфа инстанс ↔ шаблон (DIVERGED ≠ «инстанс старее»)
+│   ├── harness-contribute.sh       ← подъём инстанс → шаблон (инструмент шаблона, не инстанса)
+│   ├── lint-core-purity.sh         ← гейт чистоты CORE в точке подъёма (денилист + ratchet)
+│   ├── core-denylist.txt           ← стек-токены: замер без файла не воспроизводится
+│   ├── lib/layers.sh               ← CORE_PATHS: что обязано доехать до потребителя
+│   ├── verify-harness.sh           ← smoke test инстанса (guard exit 2, sensor green, /note)
+│   ├── verify-bootstrap.sh         ← самопроверка канала bootstrap
+│   ├── verify-copier.sh            ← самопроверка канала Copier (CORE_PATHS = источник истины)
+│   └── check-docs-reality.sh       ← доки против факта: устаревшие утверждения, ссылки, числа
 └── docs/specify-implement-review.md ← методология Specify → Implement → Review
 ```
 
