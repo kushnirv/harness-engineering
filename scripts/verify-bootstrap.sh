@@ -270,6 +270,14 @@ check "плейсхолдеров в doc-каркасе нет" "$R" нет
 grep -q "заполнить при скрининге" "$P/.claude/docs/ARCHITECTURE.md" 2>/dev/null && R=yes || R=no
 check "незаполненное помечено маркером" "$R" yes
 
+# AC-протокол ревью: словарь вердиктов и запрет ставить MET по наличию ссылки. Ссылку и так
+# проверяет check-ac-refs грепом — от ревью нужен разбор поведения.
+grep -q 'CANNOT ASSESS' "$P/.claude/docs/REVIEW.md" 2>/dev/null && R=да || R=нет
+check "REVIEW несёт вердикты AC-сверки" "$R" да
+
+grep -q 'AC-сверка недоступна' "$P/.claude/docs/REVIEW.md" 2>/dev/null && R=да || R=нет
+check "случай «спеки нет» описан" "$R" да
+
 # На model-policy ссылается workflow.md как на существующий док, без оговорки «если завёл».
 # Проверяем содержимое, а не факт файла: пустой док прошёл бы проверку на существование.
 grep -q 'Fallback' "$P/.claude/docs/model-policy.md" 2>/dev/null && R=да || R=нет
