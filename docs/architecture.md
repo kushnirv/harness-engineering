@@ -128,11 +128,15 @@ harness-template/
 │   │   │   └── lang/               ← vue.md, dotnet.md, go.md, php.md (paths-scoped)
 │   │   └── docs/                   ← проектная память (JIT)
 │   │       ├── ARCHITECTURE.md.template  ← generic
-│   │       ├── REVIEW.md.template        ← generic
+│   │       ├── REVIEW.md.template        ← чеклист + протокол сверки AC
 │   │       ├── gotchas.md.template       ← реестр ловушек (§-нумерация)
-│   │       └── model-policy.md.template  ← роутинг по моделям + fallback
+│   │       ├── model-policy.md.template  ← роутинг по моделям + fallback
+│   │       ├── dor-gate.md.template      ← входы перед срезом (три ответа, не галочка)
+│   │       ├── completion.md.template    ← онбординг + «понимаешь / на доверии»
+│   │       ├── background-offload.md.template ← что отдавать агентам
+│   │       └── testing-guide.md.template ← процедура мутации, хрупкость, reporter
 │   ├── lang-packs/                 ← языковые пакеты поверх ядра
-│   │   └── vue/                    ← пример: add-component, dev-guide, Vue-ревью
+│   │   └── vue/                    ← add-component, dev-guide, Vue-ревью, FSD, макеты, real-runtime
 │   ├── scripts/                    ← CORE-скрипты, едут оба канала
 │   │   ├── load-context.sh         ← SessionStart: активные спеки + вика из личного конфига
 │   │   ├── log-append.sh           ← append записи в лог (не Edit: дифает файл целиком)
