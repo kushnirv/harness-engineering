@@ -1,7 +1,7 @@
 # Review Checklist — <PROJECT_NAME>
 
 > Читать при ревью (Read): `.claude/docs/REVIEW.md` — не `@import` (`@` грузит на старте).
-> Generic-ядро. Языковые добавки — в lang-pack (напр. `REVIEW-vue.md`).
+> Generic-ядро. Языковые добавки — в lang-pack (`REVIEW-<lang>.md`).
 
 ## Сверка критериев приёмки — ПЕРВОЙ секцией, если спека есть
 

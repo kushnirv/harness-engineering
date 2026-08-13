@@ -33,7 +33,13 @@ BASELINE_FILE="${CORE_PURITY_BASELINE:-${REPO_ROOT}/scripts/lint-core-purity.bas
 
 # Что считается CORE-текстом. Скрипты и JSON не берём: там стек-токен законен по природе
 # (`npm ci` внутри guard'а — это команда, а не правило для агента).
-CORE_GLOBS="${CORE_PURITY_GLOBS:-${REPO_ROOT}/skeleton/.claude/rules/common/*.md ${REPO_ROOT}/skeleton/.claude/skills/*/SKILL.md}"
+#
+# Область — «что едет КАЖДОМУ инстансу», а не «что лежит в rules/». Первая версия смотрела
+# только rules/common и скилы, и мимо гейта проходили 8 доков из цикла доставки `bootstrap.sh`
+# плюс сам роутер `CLAUDE.md.template` — 6 стек-токенов, которых никто не проверял (нашло
+# независимое ревью 13.08). Языковые слои (`rules/lang/`, `lang-packs/`) СЮДА НЕ ВХОДЯТ:
+# стек-токен там и есть их работа.
+CORE_GLOBS="${CORE_PURITY_GLOBS:-${REPO_ROOT}/skeleton/.claude/rules/common/*.md ${REPO_ROOT}/skeleton/.claude/skills/*/SKILL.md ${REPO_ROOT}/skeleton/.claude/docs/*.md.template ${REPO_ROOT}/skeleton/CLAUDE.md.template ${REPO_ROOT}/skeleton/PACKAGE_CLAUDE.md.template}"
 
 say()  { [ "$QUIET" -eq 1 ] || printf '%s\n' "$1"; }
 warn() { printf 'lint-core-purity: %s\n' "$1" >&2; }
@@ -61,8 +67,11 @@ trap 'rm -f "$HITS_FILE"' EXIT
 
 # Помеченная строка = файл:номер:причина. Считаем СТРОКИ, а не совпадения: два токена в
 # одной строке — одна единица работы, иначе счётчик зависит от плотности слов.
+#
+# Путь ОТНОСИТЕЛЬНЫЙ, не basename: `SKILL.md` в дереве пять штук, и две помеченные строки с
+# одинаковым номером в разных скилах склеивались бы в одну — счётчик врал бы вниз.
 for f in $FILES; do
-  base="$(basename "$f")"
+  base="${f#${REPO_ROOT}/}"
 
   # 1. Стек-токены.
   printf '%s\n' "$TOKENS" | while IFS= read -r tok; do
@@ -88,14 +97,22 @@ FILTERED="$(mktemp)"
 trap 'rm -f "$HITS_FILE" "$FILTERED"' EXIT
 while IFS="$(printf '\t')" read -r base ln reason text; do
   [ -z "${base:-}" ] && continue
-  full=""
-  for f in $FILES; do
-    [ "$(basename "$f")" = "$base" ] && full="$f" && break
-  done
-  [ -z "$full" ] && continue
+  full="${REPO_ROOT}/${base}"
+  [ -f "$full" ] || continue
   own="$(sed -n "${ln}p" "$full" 2>/dev/null)"
+  # Вверх — до первой ЗНАЧАЩЕЙ строки, пустые перешагиваем (не больше трёх: дальше метка
+  # прикрывала бы то, к чему не относится). Первая версия смотрела ровно `ln-1`, и вставленная
+  # под меткой пустая строка отменяла её молча — правило снова помечалось, автор про метку уже
+  # забыл. Поймано независимым ревью 13.08 вставкой одной пустой строки.
   prev=""
-  [ "$ln" -gt 1 ] && prev="$(sed -n "$((ln - 1))p" "$full" 2>/dev/null)"
+  p=$((ln - 1)); hops=0
+  while [ "$p" -ge 1 ] && [ "$hops" -lt 3 ]; do
+    cand="$(sed -n "${p}p" "$full" 2>/dev/null)"
+    case "$cand" in
+      *[![:space:]]*) prev="$cand"; break ;;
+    esac
+    p=$((p - 1)); hops=$((hops + 1))
+  done
   # Регекс, а не glob-`case`: нужно «после core-ok: идёт хотя бы один значащий символ», а
   # glob такого не выражает — `[!-[:space:]]*` матчит и пустой хвост, и метка без причины
   # проходила (поймано мутацией). `>` и `-` исключены, иначе закрывающий `-->` читается
@@ -126,8 +143,9 @@ if [ "$QUIET" -eq 0 ] && [ "$N" -gt 0 ]; then
     say "  $file — $cnt"
   done
   say ""
-  say "Строки (первые 40):"
-  sort -u "$FILTERED" | head -40 | while IFS="$(printf '\t')" read -r base ln reason text; do
+  # Без `head`: усечённый список читается как полный, а разбирать надо все. Долго — есть --quiet.
+  say "Строки:"
+  sort -u -t"$(printf '\t')" -k1,1 -k2,2n "$FILTERED" | while IFS="$(printf '\t')" read -r base ln reason text; do
     say "  $base:$ln — $reason"
     say "      ${text}"
   done
