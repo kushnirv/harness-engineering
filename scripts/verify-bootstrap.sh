@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Самопроверка bootstrap.sh. Прогон: bash scripts/verify-bootstrap.sh
-# Разворачивает Python-инстанс во временной папке и проверяет 32 условия по группам:
-#   разворот      — дорендер трёх файлов харнесса, подмена сенсора, плейсхолдеры, smoke, время
-#   doc-каркас    — ARCHITECTURE/gotchas/REVIEW, секции данных и логики, маркеры незаполненного
+# Разворачивает Python-инстанс во временной папке и проверяет 64 условия по группам:
+#   разворот      — дорендер файлов харнесса, подмена сенсора, плейсхолдеры, smoke, время
+#   лог           — log-append вставляет запись сверху и отказывается на пустом входе
+#   сверка AC     — check-ac-refs: дыра ловится, ID вне секции не считается, маска не глобится
+#   Ярус 3        — pre-push: секрет-скан до тестов, изоляция stdin, активация git-хука
+#   SessionStart  — видит спеку, вика грузится из личного конфига вне репозитория
+#   doc-каркас    — ARCHITECTURE/gotchas/REVIEW/model-policy, секции, маркеры незаполненного
 #   лог и MOC     — docs/log.md, docs/MOC.md с ярусами
 #   карта доков   — блок в CLAUDE.md, отсутствие @-импортов
 #   сенсор в деле — сигнал на красном тесте, молчание на зелёном
@@ -255,7 +259,7 @@ check "smoke-тест зелёный" "$R" green
 check "разворот меньше 20 с (факт: ${ELAPSED}с)" "$R" fast
 
 echo "== Doc-каркас =="
-for DOC in ARCHITECTURE gotchas REVIEW; do
+for DOC in ARCHITECTURE gotchas REVIEW model-policy; do
   [[ -f "$P/.claude/docs/$DOC.md" ]] && R=yes || R=no
   check "$DOC.md дорендерен" "$R" yes
 done
@@ -265,6 +269,14 @@ check "плейсхолдеров в doc-каркасе нет" "$R" нет
 
 grep -q "заполнить при скрининге" "$P/.claude/docs/ARCHITECTURE.md" 2>/dev/null && R=yes || R=no
 check "незаполненное помечено маркером" "$R" yes
+
+# На model-policy ссылается workflow.md как на существующий док, без оговорки «если завёл».
+# Проверяем содержимое, а не факт файла: пустой док прошёл бы проверку на существование.
+grep -q 'Fallback' "$P/.claude/docs/model-policy.md" 2>/dev/null && R=да || R=нет
+check "model-policy содержит правило fallback" "$R" да
+
+grep -q 'model-policy.md' "$P/docs/MOC.md" 2>/dev/null && R=да || R=нет
+check "model-policy указан в MOC" "$R" да
 
 grep -q "pytest" "$P/.claude/docs/ARCHITECTURE.md" 2>/dev/null && R=yes || R=no
 check "языковые значения подставлены (pytest)" "$R" yes

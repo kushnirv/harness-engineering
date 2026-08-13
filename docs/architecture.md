@@ -129,7 +129,8 @@ harness-template/
 │   │   └── docs/                   ← проектная память (JIT)
 │   │       ├── ARCHITECTURE.md.template  ← generic
 │   │       ├── REVIEW.md.template        ← generic
-│   │       └── gotchas.md.template       ← реестр ловушек (§-нумерация)
+│   │       ├── gotchas.md.template       ← реестр ловушек (§-нумерация)
+│   │       └── model-policy.md.template  ← роутинг по моделям + fallback
 │   ├── lang-packs/                 ← языковые пакеты поверх ядра
 │   │   └── vue/                    ← пример: add-component, dev-guide, Vue-ревью
 │   ├── scripts/                    ← CORE-скрипты, едут оба канала
@@ -139,7 +140,7 @@ harness-template/
 │   └── .harness.conf.example       ← все параметры с комментариями
 ├── examples/minimal/               ← рабочий минимальный пример
 ├── scripts/verify-harness.sh       ← smoke test инстанса (guard exit 2, sensor green, /note)
-├── scripts/verify-bootstrap.sh     ← самопроверка канала bootstrap (52 проверки)
+├── scripts/verify-bootstrap.sh     ← самопроверка канала bootstrap (64 проверки)
 ├── scripts/verify-copier.sh        ← самопроверка канала Copier (CORE_PATHS = источник истины)
 └── docs/specify-implement-review.md ← методология Specify → Implement → Review
 ```
