@@ -133,10 +133,18 @@ flowchart LR
     A["rules/common/*"] --> C["агент: универсальные правила"]
     B["rules/lang/&lt;lang&gt;.md<br/>(paths-scoped)"] --> C
     D["lang-packs/&lt;lang&gt;/<br/>(skills, docs)"] -.->|"опц. наложить"| E["instance"]
+    A -.->|"гейт чистоты:<br/>стек-токен → сюда"| B
     style A fill:#e1f5ff
     style B fill:#fff0d0
     style D fill:#fff0d0
 ```
+
+**Границу держит `scripts/lint-core-purity.sh`, не дисциплина.** CORE несёт требование, языковой
+слой — инструмент. Пример: «фича по макету закрывается сверкой с макетом» живёт в
+`rules/common/workflow.md`, а чем сверять (Figma ↔ localhost, chrome-devtools MCP) — в
+`rules/lang/vue.md`, потому что доки под это приезжают только с lang-pack `vue` и
+бэкенд-инстанс их не получает вовсе. Порог линта — ноль: любая новая стек-специфика в CORE
+краснеет на первом же прогоне.
 
 ### Дерево
 

@@ -2,7 +2,8 @@
 
 Language-agnostic шаблон харнесса для **Claude Code**.
 
-Харнесс = `CLAUDE.md` + хуки на четырёх ярусах (pre-commit / sensor / gate / pre-push) + skills +
+Харнесс = `CLAUDE.md` + хуки на трёх ярусах, которые ставит шаблон (sensor / gate / pre-push;
+pre-commit — Ярус 0 — заводит проект сам, линтер у каждого стека свой) + skills +
 path-scoped rules + связь с долгосрочной памятью. Ядро не зависит от стека: Vue, .NET, Go, PHP,
 python. Языковая специфика — отдельным слоем (`rules/lang/` + `lang-packs/`).
 
@@ -53,7 +54,7 @@ chmod +x .claude/guards/*.sh .claude/skills/note/append.sh
 cp skeleton/CLAUDE.md.template CLAUDE.md
 
 # 5. Ярус 3 на pre-push. Логика — в .claude/guards/pre-push.sh (gate + секрет-скан +
-#    полные тесты + покрытие изменённых строк), она приезжает вместе с харнессом.
+#    сверка AC↔тест + полные тесты + покрытие изменённых строк), приезжает с харнессом.
 #    Включить нужно локально:
 printf '#!/usr/bin/env sh\nsh "$(git rev-parse --show-toplevel)/.claude/guards/pre-push.sh"\n' \
   > .git/hooks/pre-push && chmod +x .git/hooks/pre-push
