@@ -369,6 +369,39 @@ check "устаревший отчёт покрытия назван вслух"
 
 rm -rf "$DCF"
 
+echo "== Чистота CORE (lint-core-purity) =="
+
+# Фикстура своя: кейсы не должны зависеть от текущего состояния правил шаблона, иначе они
+# начнут краснеть или зеленеть от любой правки текста, не относящейся к линту.
+LCP="$P/../lcp-probe"; rm -rf "$LCP"; mkdir -p "$LCP/rules" "$LCP/scripts"
+printf 'npm\nvitest\n' > "$LCP/scripts/deny.txt"
+echo 0 > "$LCP/scripts/baseline"
+lcp() {  # $1 — содержимое пробного правила; печатает «прошло» либо «упало»
+  printf '%s\n' "$1" > "$LCP/rules/probe.md"
+  ( CORE_DENYLIST="$LCP/scripts/deny.txt" \
+    CORE_PURITY_BASELINE="$LCP/scripts/baseline" \
+    CORE_PURITY_GLOBS="$LCP/rules/*.md" \
+    bash "$TPL/scripts/lint-core-purity.sh" --quiet >/dev/null 2>&1 ) && echo прошло || echo упало
+}
+
+check "чистое правило проходит" "$(lcp '- Проверка закрывает изменение.')" прошло
+check "стек-токен ловится" "$(lcp '- Гоняй `npm run build` перед пушем.')" упало
+check "core-ok с причиной пропускает" \
+  "$(lcp '- Гоняй `npm run build`. <!-- core-ok: пример команды, не правило -->')" прошло
+# Метка без причины раньше проходила: glob-паттерн `[!-[:space:]]*` матчит пустой хвост.
+check "core-ok без причины не пропускает" "$(lcp '- Гоняй `npm run build`. <!-- core-ok: -->')" упало
+check "висячая ссылка Gotcha ловится" "$(lcp '- Правило без обоснования (Gotcha 56).')" упало
+check "голая дата ловится" "$(lcp '- Правило, которое что-то доказало 29.07.')" упало
+
+# Нет денилиста → судить не по чему: предупреждение и exit 0, а не красный на пустом месте.
+LCP_OUT="$( CORE_DENYLIST="$LCP/scripts/нет.txt" CORE_PURITY_GLOBS="$LCP/rules/*.md" \
+  bash "$TPL/scripts/lint-core-purity.sh" 2>&1 )" && R=0 || R=не0
+check "без денилиста линт не падает" "$R" 0
+[[ "$LCP_OUT" == *"нет файла денилиста"* ]] && R=сказал || R=молчит
+check "про отсутствие денилиста сказано вслух" "$R" сказал
+
+rm -rf "$LCP"
+
 # Регресс: SessionStart не должен падать в среде без HOME. Раньше `${HOME}` внутри default-
 # выражения разворачивался под set -u и ронял скрипт до его же graceful-ветки.
 (cd "$P" && env -u HOME bash scripts/load-context.sh >/dev/null 2>&1) && R=0 || R=не0

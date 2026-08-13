@@ -191,6 +191,8 @@ harness-template/
 │   ├── bootstrap.sh                ← раскатка инстанса: второй канал доставки, не только Copier
 │   ├── harness-status.sh           ← замер дрейфа инстанс ↔ шаблон (DIVERGED ≠ «инстанс старее»)
 │   ├── harness-contribute.sh       ← подъём инстанс → шаблон (инструмент шаблона, не инстанса)
+│   ├── lint-core-purity.sh         ← гейт чистоты CORE в точке подъёма (денилист + ratchet)
+│   ├── core-denylist.txt           ← стек-токены: замер без файла не воспроизводится
 │   ├── lib/layers.sh               ← CORE_PATHS: что обязано доехать до потребителя
 │   ├── verify-harness.sh           ← smoke test инстанса (guard exit 2, sensor green, /note)
 │   ├── verify-bootstrap.sh         ← самопроверка канала bootstrap
