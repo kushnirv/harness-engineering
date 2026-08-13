@@ -259,7 +259,7 @@ check "smoke-тест зелёный" "$R" green
 check "разворот меньше 20 с (факт: ${ELAPSED}с)" "$R" fast
 
 echo "== Doc-каркас =="
-for DOC in ARCHITECTURE gotchas REVIEW model-policy; do
+for DOC in ARCHITECTURE gotchas REVIEW model-policy dor-gate completion background-offload testing-guide; do
   [[ -f "$P/.claude/docs/$DOC.md" ]] && R=yes || R=no
   check "$DOC.md дорендерен" "$R" yes
 done
@@ -277,6 +277,28 @@ check "REVIEW несёт вердикты AC-сверки" "$R" да
 
 grep -q 'AC-сверка недоступна' "$P/.claude/docs/REVIEW.md" 2>/dev/null && R=да || R=нет
 check "случай «спеки нет» описан" "$R" да
+
+# Доки, на которые CORE-правила ссылаются БЕЗУСЛОВНО, обязаны нести суть, а не заголовки:
+# существование файла ничего не доказывает — пустой шаблон прошёл бы проверку на -f.
+grep -q 'получено' "$P/.claude/docs/dor-gate.md" 2>/dev/null && R=да || R=нет
+check "dor-gate несёт три ответа по входам" "$R" да
+
+grep -q 'На доверии' "$P/.claude/docs/completion.md" 2>/dev/null && R=да || R=нет
+check "completion делит понимание и доверие" "$R" да
+
+grep -q 'Мутация' "$P/.claude/docs/testing-guide.md" 2>/dev/null && R=да || R=нет
+check "testing-guide несёт процедуру мутации" "$R" да
+
+grep -q 'Отдавать' "$P/.claude/docs/background-offload.md" 2>/dev/null && R=да || R=нет
+check "background-offload несёт признак делегирования" "$R" да
+
+# Ссылки CORE-правил на эти доки больше НЕ условные — значит битых быть не должно.
+MISS=""
+for D in dor-gate completion background-offload testing-guide model-policy; do
+  [[ -f "$P/.claude/docs/$D.md" ]] || MISS="$MISS $D"
+done
+[[ -z "$MISS" ]] && R=все || R="нет:$MISS"
+check "все доки из безусловных ссылок на месте" "$R" все
 
 # На model-policy ссылается workflow.md как на существующий док, без оговорки «если завёл».
 # Проверяем содержимое, а не факт файла: пустой док прошёл бы проверку на существование.

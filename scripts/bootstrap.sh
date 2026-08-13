@@ -161,7 +161,7 @@ render "$TPL/skeleton/.claude/settings.json.template" \
 
 # Doc-каркас. Copier их не привозит: .claude/docs в _exclude, плюс маска *.template.
 mkdir -p .claude/docs
-for DOC in ARCHITECTURE gotchas REVIEW model-policy; do
+for DOC in ARCHITECTURE gotchas REVIEW model-policy dor-gate completion background-offload testing-guide; do
   render "$TPL/skeleton/.claude/docs/$DOC.md.template" > ".claude/docs/$DOC.md"
 done
 
