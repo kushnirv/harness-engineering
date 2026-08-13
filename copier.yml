@@ -4,21 +4,30 @@ _answers_file: .copier-answers.yml
 _exclude:
   # ВНИМАНИЕ: это blacklist, не whitelist (Copier не поддерживает re-include после "*").
   # Новый НЕ-CORE файл в skeleton/ просочится в инстанс, пока не добавлен сюда.
-  # После добавления файлов в skeleton — сверяйся с CORE_PATHS (scripts/lib/layers.sh)
-  # и рендером: `copier copy --data lang=vue . /tmp/x --defaults --trust && find /tmp/x -type f`.
+  # После добавления файлов в skeleton — сверяйся с CORE_PATHS (scripts/lib/layers.sh).
+  # Готовая проверка обоих условий (CORE доехал, лишнее не протекло): scripts/verify-copier.sh.
+  # Руками:
+  #   copier copy --vcs-ref HEAD --data project_name=probe --data lang=vue . /tmp/probe \
+  #     --defaults --trust && find /tmp/probe -type f
+  # `--vcs-ref HEAD` обязателен: без него Copier для git-шаблона рендерит последний ТЕГ, а не
+  # текущее состояние, и новых файлов в выводе просто нет. Но и с ним берётся последний
+  # КОММИТ — незакоммиченная правка невидима, поэтому verify-copier.sh рендерит одноразовый
+  # клон рабочего дерева.
   # Non-CORE skeleton files — template scaffolding
   - "*.template"
   - "lang-packs"
-  - "scripts"
+  # `scripts` целиком исключать нельзя: log-append / check-ac-refs / load-context — CORE,
+  # на них ссылаются правила и settings.json. Глухое исключение давало пять битых ссылок.
   - ".husky"
-  - ".cursor"
   - ".harness.conf.example"
 
   # Non-CORE .claude subdirs
   - ".claude/docs"
   - ".claude/settings.json.template"
-  # Роли-агенты — instance-owned scaffold (инстанс кастомизирует под свой стек/KB,
-  # fenris это доказал). Раскатка при init, обновления метода НЕ форсятся сверху.
+  # Роли-агенты — instance-owned scaffold (ADR-13). Copier их НЕ доставляет ни при init,
+  # ни при update: раскатка только явным флагом `bootstrap.sh <имя> <lang> --agents`.
+  # Причина — агент завязан на стек и базу знаний проекта (fenris это доказал),
+  # форс-синк ломал бы инстанс, а пустой плейсхолдер в каждом репо вреднее явного принятия.
   - ".claude/agents"
 
   # run-pytest-hook — Python-LANG sensor: доставляем ТОЛЬКО при lang=python (как lang-файлы ниже),
@@ -33,6 +42,7 @@ _exclude:
   - "{% if lang != 'go' %}.claude/rules/lang/go.md{% endif %}"
   - "{% if lang != 'php' %}.claude/rules/lang/php.md{% endif %}"
   - "{% if lang != 'python' %}.claude/rules/lang/python.md{% endif %}"
+  - "{% if lang != 'dotnet' %}.claude/rules/lang/dotnet.md{% endif %}"
 
 project_name:
   type: str
@@ -41,5 +51,5 @@ project_name:
 lang:
   type: str
   help: Языковой пак
-  choices: [vue, go, php, python, none]
+  choices: [vue, go, php, python, dotnet, none]
   default: vue

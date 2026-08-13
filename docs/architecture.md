@@ -4,7 +4,6 @@
 
 ## Содержание
 - [Версионируемый sync (Copier)](#версионируемый-sync-copier)
-- [Dual-tool: Claude Code + Cursor](#dual-tool-claude-code--cursor)
 - [Почему скелет так устроен](#почему-скелет-так-устроен)
 - [Структура репо](#структура-репо)
 - [Language-agnostic: common-core + per-language](#language-agnostic-common-core--per-language)
@@ -28,18 +27,6 @@ pipx install copier
 **Обратный канал (инстанс → шаблон):** улучшение CORE, найденное в инстансе, поднимается
 `scripts/harness-contribute.sh <instance>` (копирует CORE-изменения + печатает diff; git/PR за
 человеком). Карта инстансов и их дрейфа — `REGISTRY.md`.
-
-## Dual-tool: Claude Code + Cursor
-
-Оба инструмента в работе. Хуки настраиваются в обоих, но указывают на **одни и те же**
-скрипты `guards/` — логика не дублируется:
-
-| Инструмент | Конфиг | Механика |
-|-----------|--------|----------|
-| Claude Code | `.claude/settings.json` | `PreToolUse`/`PostToolUse` → `bash guards/*.sh` |
-| Cursor | `.cursor/hooks.json` | `postToolUse` (exit 2 блокирует) → те же `guards/*.sh` |
-
-Меняешь guard-логику один раз в скрипте — работает в обоих.
 
 ## Почему скелет так устроен
 
@@ -127,6 +114,7 @@ harness-template/
 │   │   │   ├── block-zones.sh      ← guard: читает READONLY_ZONES
 │   │   │   ├── run-test-hook.sh    ← sensor: WATCH_DIR + TEST_CMD (пофайлово)
 │   │   │   ├── gate.sh             ← gate Ярус 2: GATE_CMD без тестов (Stop + база pre-push, loop-safe)
+│   │   │   ├── pre-push.sh         ← Ярус 3: gate + секрет-скан + тесты + покрытие diff (включает git-хук)
 │   │   │   └── nudge.sh            ← nudge: UserPromptSubmit, boundary→verify-напоминание (exit 0, не блокирует)
 │   │   ├── skills/                 ← команды (текущий стандарт)
 │   │   │   ├── note/               ← /note: capture в PENDING-NOTES.md
@@ -135,19 +123,30 @@ harness-template/
 │   │   │   ├── rename/             ← /rename: ссылки до rename → атомарно (авто-инвок)
 │   │   │   └── end-session/        ← /end-session: triage + лог
 │   │   ├── rules/                  ← common-core + per-language
-│   │   │   ├── common/             ← workflow, testing, git, methodology-routing, context-hygiene (всегда)
-│   │   │   └── lang/               ← vue.md, go.md, php.md (paths-scoped)
+│   │   │   ├── common/             ← workflow, testing, git, methodology-routing,
+│   │   │   │                          context-hygiene, comments (всегда)
+│   │   │   └── lang/               ← vue.md, dotnet.md, go.md, php.md (paths-scoped)
 │   │   └── docs/                   ← проектная память (JIT)
 │   │       ├── ARCHITECTURE.md.template  ← generic
-│   │       ├── REVIEW.md.template        ← generic
-│   │       └── gotchas.md.template       ← реестр ловушек (§-нумерация)
+│   │       ├── REVIEW.md.template        ← чеклист + протокол сверки AC
+│   │       ├── gotchas.md.template       ← реестр ловушек (§-нумерация)
+│   │       ├── model-policy.md.template  ← роутинг по моделям + fallback
+│   │       ├── dor-gate.md.template      ← входы перед срезом (три ответа, не галочка)
+│   │       ├── completion.md.template    ← онбординг + «понимаешь / на доверии»
+│   │       ├── background-offload.md.template ← что отдавать агентам
+│   │       └── testing-guide.md.template ← процедура мутации, хрупкость, reporter
 │   ├── lang-packs/                 ← языковые пакеты поверх ядра
-│   │   └── vue/                    ← пример: add-component, dev-guide, Vue-ревью
-│   ├── scripts/load-context.sh     ← SessionStart: грузит внешнюю вики (опц.)
-│   ├── .cursor/hooks.json          ← делегирует к .claude/guards/ (dual-tool)
+│   │   └── vue/                    ← add-component, dev-guide, Vue-ревью, FSD, макеты, real-runtime
+│   ├── scripts/                    ← CORE-скрипты, едут оба канала
+│   │   ├── load-context.sh         ← SessionStart: активные спеки + вика из личного конфига
+│   │   ├── log-append.sh           ← append записи в лог (не Edit: дифает файл целиком)
+│   │   ├── check-ac-refs.sh        ← сверка «AC-ID ↔ ссылка из теста», ratchet-порог
+│   │   └── check-diff-coverage.sh   ← покрытие ИЗМЕНЁННЫХ строк, ratchet-порог
 │   └── .harness.conf.example       ← все параметры с комментариями
 ├── examples/minimal/               ← рабочий минимальный пример
-├── scripts/verify-harness.sh       ← smoke test (guard exit 2, sensor green, /note)
+├── scripts/verify-harness.sh       ← smoke test инстанса (guard exit 2, sensor green, /note)
+├── scripts/verify-bootstrap.sh     ← самопроверка канала bootstrap (90 проверок)
+├── scripts/verify-copier.sh        ← самопроверка канала Copier (CORE_PATHS = источник истины)
 └── docs/specify-implement-review.md ← методология Specify → Implement → Review
 ```
 
@@ -160,7 +159,7 @@ harness-template/
 
 | Слой | Что | Когда грузится |
 |------|-----|----------------|
-| `rules/common/*.md` | workflow, testing, git, methodology-routing, context-hygiene — любой стек | Всегда |
+| `rules/common/*.md` | workflow, testing, git, methodology-routing, context-hygiene, comments — любой стек | Всегда |
 | `rules/lang/<lang>.md` | идиомы языка (`paths:` frontmatter) | Только на совпавших файлах |
 | `lang-packs/<lang>/` | skills + docs под стек (напр. `/add-component`) | Опц. накладываешь при setup |
 
@@ -191,14 +190,17 @@ lang-pack. Generic-ядро не трогаешь.
 
 ## Долгосрочная память
 
-`load-context.sh` — пример одного подхода: грузить `overview.md` + `log.md` из внешней вики.
-Не стандарт. Три рабочих варианта:
+Два слоя, не альтернативы:
 
-| Вариант | Где хранить | Когда выбирать |
-|---------|-------------|----------------|
-| `.claude/docs/` | В репо (в git) | Команда, CI-агенты, версионируемость |
-| Внешняя вики | TechWiki / Notion / Confluence | Личный нарратив, кросс-проектный контекст |
-| Только CLAUDE.md | Нигде отдельно | Маленький проект, один разработчик |
+| Слой | Где хранить | Что | Версионируется |
+|------|-------------|-----|----------------|
+| `.claude/docs/` | В репо (в git) | Архитектура, паттерны, review-правила | Да |
+| Внешняя вика | Где угодно вне репо | Лог сессий, личный нарратив, мотивации ADR | Нет |
+
+Адрес вики — в ЛИЧНОМ конфиге вне репозитория: `~/.harness/<имя-каталога-репо>.conf`
+(или `$HARNESS_LOCAL_CONF`). В версионируемом `.harness.conf` его нет намеренно: путь в чужой
+файловой системе уехал бы в общий git. `load-context.sh` читает командный конфиг, затем личный —
+личный переопределяет. Вики нет — слой опциональный, скрипт молчит.
 
 `.claude/docs/` читать по требованию (Read, когда нужно). НЕ `@import`: `@`-ссылка грузит файл в контекст на СТАРТЕ, не лениво — для JIT не годится.
 

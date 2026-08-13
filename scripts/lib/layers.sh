@@ -5,6 +5,7 @@ CORE_PATHS=(
   ".claude/guards/gate.sh"
   ".claude/guards/run-test-hook.sh"
   ".claude/guards/nudge.sh"
+  ".claude/guards/pre-push.sh"
   ".claude/skills/note/append.sh"
   ".claude/skills/note/SKILL.md"
   ".claude/skills/end-session/SKILL.md"
@@ -16,4 +17,11 @@ CORE_PATHS=(
   ".claude/rules/common/workflow.md"
   ".claude/rules/common/methodology-routing.md"
   ".claude/rules/common/context-hygiene.md"
+  ".claude/rules/common/comments.md"
+  "docs/specs/_template.md"
+  # Скрипты, на которые ссылаются правила и settings.json.
+  "scripts/log-append.sh"
+  "scripts/check-ac-refs.sh"
+  "scripts/check-diff-coverage.sh"
+  "scripts/load-context.sh"
 )

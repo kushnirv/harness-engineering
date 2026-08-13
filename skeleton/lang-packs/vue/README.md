@@ -10,8 +10,11 @@ lang-packs/vue/
 ├── skills/
 │   └── add-component/SKILL.md   ← скаффолдинг Vue-компонента (/add-component)
 └── docs/
-    ├── dev-guide.md.template    ← как добавить компонент (Vue-флоу)
-    └── REVIEW-vue.md.template   ← Vue-специфичный чеклист ревью
+    ├── dev-guide.md.template            ← как добавить компонент (Vue-флоу)
+    ├── REVIEW-vue.md.template           ← Vue-специфичный чеклист ревью
+    ├── fsd-placement.md.template        ← выбор слоя FSD, развилка entity/feature
+    ├── design-conformance.md.template   ← сверка с макетом: intent, не пиксели
+    └── chrome-devtools-workflow.md.template ← добить UI до real-runtime
 ```
 
 Правила Vue (что грузится агенту автоматически на `*.vue`) лежат отдельно —

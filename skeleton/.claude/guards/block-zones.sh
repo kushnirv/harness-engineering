@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Guard: блокирует запись в READONLY_ZONES.
-# PreToolUse(Edit/Write/Bash) — Claude Code. postToolUse — Cursor.
+# PreToolUse(Edit/Write/Bash) — Claude Code.
 # exit 2 → блокирует в обоих контекстах.
 #
 # Конфиг (.harness.conf):
@@ -17,7 +17,7 @@ READONLY_ZONES="${READONLY_ZONES:-dist}"
 export HOOK_INPUT
 HOOK_INPUT="$(cat || true)"
 
-[[ -z "${HOOK_INPUT// }" ]] && exit 0
+[[ "$HOOK_INPUT" =~ ^[[:space:]]*$ ]] && exit 0
 
 # Recursive walk: ищем file_path в любом месте JSON
 TARGET_FILE="$(python3 <<'PY'

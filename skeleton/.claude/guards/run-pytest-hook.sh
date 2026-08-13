@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sensor (Python): запускает pytest для изменённого файла.
-# PostToolUse(Edit/Write) — Claude Code. afterFileEdit — Cursor.
+# PostToolUse(Edit/Write) — Claude Code.
 # Mute the green: exit 0 без вывода при успехе. При провале → additionalContext.
 #
 # Зачем отдельный от run-test-hook.sh: у pytest нет нативного "related tests"

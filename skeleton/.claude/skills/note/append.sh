@@ -11,7 +11,7 @@ REPO_ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || 
 BUFFER="${REPO_ROOT}/.claude/PENDING-NOTES.md"
 
 NOTE="${*:-}"
-[[ -z "${NOTE// }" ]] && { echo "note: пустая заметка — пропущено" >&2; exit 0; }
+[[ "$NOTE" =~ ^[[:space:]]*$ ]] && { echo "note: пустая заметка — пропущено" >&2; exit 0; }
 
 mkdir -p "$(dirname "$BUFFER")"
 if [[ ! -f "$BUFFER" ]]; then
