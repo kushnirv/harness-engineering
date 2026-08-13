@@ -114,6 +114,18 @@ TODO_MARK="— заполнить при скрининге"
 # ("— заполнить при скрининге/     ← основная единица"). Там нужен короткий.
 TODO_SHORT="TODO"
 
+# Python-специфичные строки конфига. Для остальных языков блок пуст: PYTEST_MODE читает
+# только run-pytest-hook.sh, а PYTHONDONTWRITEBYTECODE нужен ровно pytest.
+PY_CONF_BLOCK=""
+if [[ "$LANG_PACK" == python ]]; then
+  PY_CONF_BLOCK='PYTEST_MODE="map"
+# Байткод-кэш Python сверяется по mtime с точностью до секунды. Агент правит файл
+# чаще — вторая правка в ту же секунду оставляет .pyc «актуальным», и тест исполняет
+# прошлую версию кода. Сенсор отдаёт ложный сигнал. Хук делает source этого файла,
+# поэтому переменная доезжает до дочернего pytest. Найдено прогоном 29.07.
+export PYTHONDONTWRITEBYTECODE=1'
+fi
+
 command -v copier >/dev/null || { echo "нужен copier: uv tool install copier" >&2; exit 1; }
 
 # --vcs-ref HEAD обязателен. Без него copier для git-шаблона берёт последний ТЕГ
@@ -220,12 +232,7 @@ cat > .harness.conf <<CONF
 # Сгенерировано bootstrap.sh для lang=$LANG_PACK
 WATCH_DIR="$WATCH_DIR"
 TEST_CMD="$TEST_CMD"
-PYTEST_MODE="map"
-# Байткод-кэш Python сверяется по mtime с точностью до секунды. Агент правит файл
-# чаще — вторая правка в ту же секунду оставляет .pyc «актуальным», и тест исполняет
-# прошлую версию кода. Сенсор отдаёт ложный сигнал. Хук делает source этого файла,
-# поэтому переменная доезжает до дочернего pytest. Найдено прогоном 29.07.
-export PYTHONDONTWRITEBYTECODE=1
+$PY_CONF_BLOCK
 READONLY_ZONES="$READONLY"
 GATE_CMD="$GATE_CMD"
 GATE_TEST_CMD="$GATE_TEST_CMD"
@@ -245,30 +252,33 @@ DIFF_COVER_BASE=""
 DIFF_COVER_BASELINE="\$REPO_ROOT/scripts/check-diff-coverage.baseline"
 CONF
 
-# Копия из skeleton, не heredoc: генерация давала второй скрипт под тем же именем, и
-# SessionStart делал разное в зависимости от канала доставки.
+# Эти четыре скрипта уже привозит `copier copy` выше — `scripts` в `_exclude` не входит.
+# Безусловный `cp` тут был мёртвым шагом: перезаписывал файл тем же содержимым. Оставлена
+# СТРАХОВКА с диагностикой: если copier его не привёз (кто-то добавил путь в `_exclude`), файл
+# всё равно появится, но расхождение будет названо вслух, а не замаскировано копией.
 mkdir -p scripts
-cp "$TPL/skeleton/scripts/load-context.sh" scripts/load-context.sh
-chmod +x scripts/load-context.sh
+ensure_core_script() {
+  local name="$1" why="$2"
+  if [[ ! -f "scripts/$name" ]]; then
+    echo "HARNESS: copier не привёз scripts/$name — копирую напрямую. Проверь _exclude в copier.yml." >&2
+    echo "         зачем нужен: $why" >&2
+    cp "$TPL/skeleton/scripts/$name" "scripts/$name"
+  fi
+  chmod +x "scripts/$name"
+}
 
-# log-append.sh копируем из skeleton, а не генерируем heredoc'ом: правило в
-# rules/common/workflow.md и скил end-session требуют его ПО ИМЕНИ и запрещают Edit
-# для лога. Без файла правило неисполнимо — потребитель получал бы запрет без замены.
-cp "$TPL/skeleton/scripts/log-append.sh" scripts/log-append.sh
-chmod +x scripts/log-append.sh
+# SessionStart в settings.json смотрит на этот файл по имени.
+ensure_core_script load-context.sh "SessionStart: активные спеки и долгая память"
+# rules/common/workflow.md и скил end-session требуют его ПО ИМЕНИ и запрещают Edit для лога.
+ensure_core_script log-append.sh "append в лог вместо Edit"
+# На него ссылается шаблон спеки (docs/specs/_template.md).
+ensure_core_script check-ac-refs.sh "сверка критерий приёмки ↔ тест"
+# Ярус 3, шаг 4.
+ensure_core_script check-diff-coverage.sh "покрытие изменённых строк"
 
-# check-ac-refs.sh: на него ссылается шаблон спеки (docs/specs/_template.md). Без файла
-# ссылка была бы битой — тот самый класс дефекта, из-за которого правила врали потребителю.
-cp "$TPL/skeleton/scripts/check-ac-refs.sh" scripts/check-ac-refs.sh
-chmod +x scripts/check-ac-refs.sh
-# Порог ratchet: на свежем инстансе спек нет, непокрытых нуль — порог 0 честен.
-# Без файла скрипт считает порогом 0 и предупреждает; лучше создать явно.
+# Пороги ratchet. На свежем инстансе непокрытых нуль, поэтому ноль честен. Без файла скрипты
+# считают порогом ноль и предупреждают об отсутствии — лучше создать явно.
 echo 0 > scripts/check-ac-refs.baseline
-
-# Покрытие изменённых строк (Ярус 3). COVERAGE_REPORT пуст — проверка молчит, пока владелец не
-# настроит отчёт покрытия под свой стек.
-cp "$TPL/skeleton/scripts/check-diff-coverage.sh" scripts/check-diff-coverage.sh
-chmod +x scripts/check-diff-coverage.sh
 echo 0 > scripts/check-diff-coverage.baseline
 
 # Активация Яруса 3. Логика — в .claude/guards/pre-push.sh (версионируется, едет обоими

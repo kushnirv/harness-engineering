@@ -31,7 +31,10 @@ CONF="${REPO_ROOT}/.harness.conf"
 # Личный слой вне репо: адрес вики в версионируемом конфиге уехал бы в общий git.
 # Домашний каталог, а не `.harness.conf.local` рядом: `git add -A` не захватит то,
 # чего в дереве нет, и забытая строка в .gitignore не станет утечкой.
-LOCAL_CONF="${HARNESS_LOCAL_CONF:-${HOME}/.harness/$(basename "$REPO_ROOT").conf}"
+# ${HOME:-}, а не ${HOME}: под `set -u` bash разворачивает внутреннюю подстановку даже когда
+# внешний default не нужен, и скрипт падал на непустом HARNESS_LOCAL_CONF в среде без HOME —
+# то есть до собственной проверки «вики нет, это законно».
+LOCAL_CONF="${HARNESS_LOCAL_CONF:-${HOME:-}/.harness/$(basename "$REPO_ROOT").conf}"
 # shellcheck source=/dev/null
 [[ -f "$LOCAL_CONF" ]] && source "$LOCAL_CONF"
 

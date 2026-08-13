@@ -270,7 +270,68 @@ check "непокрытая изменённая строка роняет пр�
 ( cd "$DCF" && CLAUDE_PROJECT_DIR="$DCF" bash scripts/check-diff-coverage.sh --quiet >/dev/null 2>&1 </dev/null ) && R=прошло || R=упало
 check "рефакторинг покрытых строк проходит при пороге 100" "$R" прошло
 
+# Регресс на ложное совпадение путей (ревью 13.08): запись отчёта `src/m.py` подходит и
+# `frontend/src/m.py`, и `backend/src/m.py`. Раньше строки судились по чужой таблице покрытия;
+# теперь путь объявляется неоднозначным и не судится.
+(
+  cd "$DCF" && git checkout -q master
+  mkdir -p frontend/src backend/src
+  printf 'def a():\n    return 1\n' > frontend/src/m.py
+  printf 'def a():\n    return 1\n' > backend/src/m.py
+  git add -A && git commit -qm twins && git branch -f master HEAD
+  git checkout -q -b ambig
+  printf 'def a():\n    return 1\n\ndef b():\n    return 2\n' > frontend/src/m.py
+  git add -A && git commit -qm ambig
+  touch coverage.xml
+) >/dev/null 2>&1
+DC_OUT="$( (cd "$DCF" && CLAUDE_PROJECT_DIR="$DCF" bash scripts/check-diff-coverage.sh) 2>&1 </dev/null )"
+[[ "$DC_OUT" == *"неоднозначный путь"* ]] && R=назвал || R=промолчал
+check "одноимённые файлы: путь назван неоднозначным" "$R" назвал
+
+# Регресс на юникод в имени: git цитирует такие пути в хедере diff, и файл выпадал из проверки.
+(
+  cd "$DCF" && git checkout -q master && git checkout -q -b uni
+  printf 'def a():\n    return 1\n\ndef b():\n    return 2\n' > "frontend/src/тест.py"
+  git add -A && git commit -qm uni
+  cat > coverage.xml <<'XML'
+<?xml version="1.0"?>
+<coverage><packages><package><classes>
+<class filename="frontend/src/тест.py"><lines>
+<line number="1" hits="1"/><line number="2" hits="1"/><line number="4" hits="0"/>
+</lines></class>
+</classes></package></packages></coverage>
+XML
+  touch coverage.xml
+) >/dev/null 2>&1
+( cd "$DCF" && CLAUDE_PROJECT_DIR="$DCF" bash scripts/check-diff-coverage.sh --quiet >/dev/null 2>&1 </dev/null ) && R=прошло || R=упало
+check "юникод в имени файла не выпадает из проверки" "$R" упало
+
+# Регресс на устаревший отчёт: покрытие от прошлого прогона описывает код, которого уже нет.
+(cd "$DCF" && touch -t 200001010000 coverage.xml) >/dev/null 2>&1
+DC_OUT="$( (cd "$DCF" && CLAUDE_PROJECT_DIR="$DCF" bash scripts/check-diff-coverage.sh) 2>&1 </dev/null )"
+[[ "$DC_OUT" == *"старее изменённых файлов"* ]] && R=назвал || R=промолчал
+check "устаревший отчёт покрытия назван вслух" "$R" назвал
+
 rm -rf "$DCF"
+
+# Регресс: SessionStart не должен падать в среде без HOME. Раньше `${HOME}` внутри default-
+# выражения разворачивался под set -u и ронял скрипт до его же graceful-ветки.
+(cd "$P" && env -u HOME bash scripts/load-context.sh >/dev/null 2>&1) && R=0 || R=не0
+check "load-context не падает без HOME" "$R" 0
+
+# Регресс: пустой GATE_TEST_CMD молчал, хотя не запускавшиеся тесты неотличимы от прошедших.
+sed -i '' 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD=""|' "$P/.harness.conf"
+PP_OUT="$( (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1 </dev/null )"
+[[ "$PP_OUT" == *"GATE_TEST_CMD пуст"* ]] && R=сказал || R=промолчал
+check "пустой GATE_TEST_CMD назван вслух" "$R" сказал
+
+# Регресс: отсутствие check-diff-coverage.sh в инстансе тоже должно быть слышно.
+mv "$P/scripts/check-diff-coverage.sh" "$P/scripts/.hidden-dc"
+PP_OUT="$( (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1 </dev/null )"
+[[ "$PP_OUT" == *"check-diff-coverage.sh нет"* ]] && R=сказал || R=промолчал
+check "отсутствие чекера покрытия названо вслух" "$R" сказал
+mv "$P/scripts/.hidden-dc" "$P/scripts/check-diff-coverage.sh"
+sed -i '' 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="uv run pytest"|' "$P/.harness.conf"
 
 echo "== SessionStart: фаза работы и личный слой =="
 
@@ -443,6 +504,10 @@ check "зоны .NET в конфиге (obj/artifacts)" "$R" да
 
 grep -q '^AC_TEST_GLOBS=".*Tests\.cs' "$PD/.harness.conf" 2>/dev/null && R=да || R=нет
 check "маски тестов .NET, не JS" "$R" да
+
+# Конфиг обещает «настройки под твой стек» — python-строки в .NET-инстансе это обещание ломают.
+grep -qE '^PYTEST_MODE|PYTHONDONTWRITEBYTECODE' "$PD/.harness.conf" && R=есть || R=нет
+check "python-строк в конфиге .NET-инстанса нет" "$R" нет
 
 LANG_FILES="$(ls "$PD/.claude/rules/lang/" 2>/dev/null | tr '\n' ' ')"
 [[ "$LANG_FILES" == "dotnet.md " ]] && R=только-свой || R="$LANG_FILES"
