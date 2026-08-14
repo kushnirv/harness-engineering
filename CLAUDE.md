@@ -23,7 +23,7 @@
 одной командой:
 
 ```bash
-bash scripts/verify-all.sh     # ~28s: канал Copier → чистота CORE → канал bootstrap → доки
+bash scripts/verify-all.sh     # ~28s: синтаксис .sh → канал Copier → чистота CORE → канал bootstrap → доки
 ```
 
 Включение на push (git-хук не версионируется, после клона поставить заново):

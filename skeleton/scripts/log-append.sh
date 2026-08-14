@@ -44,8 +44,15 @@ fi
 ENTRY_LINES=$(wc -l < "$ENTRY" | tr -d ' ')
 BEFORE_LINES=$(wc -l < "$LOG_FILE" | tr -d ' ')
 
-TMP="${LOG_FILE}.log-append.$$"
-# shellcheck disable=SC2064
+# Имя через mktemp, а не `.$$`: PID предсказуем, и в каталоге, куда может писать кто-то ещё,
+# предсказуемое имя — окно для подмены симлинком (CWE-377). Рядом с логом, а не в /tmp:
+# переименование в конце должно остаться в пределах одной файловой системы.
+TMP="$(mktemp "${LOG_FILE}.log-append.XXXXXX")" || {
+  printf 'log-append: не удалось создать временный файл рядом с логом\n' >&2
+  exit 1
+}
+# shellcheck disable=SC2064 — $TMP разворачиваем СЕЙЧАС намеренно: cleanup обязан удалить
+# именно этот файл, а не то, на что переменная будет указывать в момент выхода.
 trap "rm -f '$TMP'" EXIT INT TERM
 
 awk -v entry="$ENTRY" '

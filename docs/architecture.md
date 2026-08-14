@@ -196,6 +196,7 @@ harness-template/
 │   │   │   ├── common/             ← workflow, testing, git, methodology-routing,
 │   │   │   │                          context-hygiene, comments (всегда)
 │   │   │   └── lang/               ← vue.md, dotnet.md, go.md, php.md, python.md (paths-scoped)
+│   │   │       └── shell.md        ← CORE: едет ВСЕГДА, харнесс каждого проекта на .sh
 │   │   └── docs/                   ← проектная память (JIT)
 │   │       ├── ARCHITECTURE.md.template  ← generic
 │   │       ├── REVIEW.md.template        ← чеклист + протокол сверки AC
@@ -226,7 +227,8 @@ harness-template/
 │   ├── lint-core-purity.sh         ← гейт чистоты CORE в точке подъёма (денилист + ratchet)
 │   ├── core-denylist.txt           ← стек-токены: замер без файла не воспроизводится
 │   ├── lib/layers.sh               ← CORE_PATHS: что обязано доехать до потребителя
-│   ├── verify-all.sh               ← Ярус 3 этой репы: все четыре самопроверки одной командой
+│   ├── verify-all.sh               ← Ярус 3 этой репы: все пять самопроверок одной командой
+│   ├── lint-shell.sh               ← синтаксис всех .sh, проверяльщик по шебангу (bash / dash)
 │   ├── verify-bootstrap.sh         ← самопроверка канала bootstrap
 │   ├── verify-copier.sh            ← самопроверка канала Copier (CORE_PATHS = источник истины)
 │   └── check-docs-reality.sh       ← доки против факта: устаревшие утверждения, ссылки, числа

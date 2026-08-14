@@ -100,7 +100,10 @@ bash scripts/verify-bootstrap.sh     # канал bootstrap: раскатка, �
 bash scripts/verify-copier.sh        # канал Copier: CORE доехал, личное и не-CORE не протекло
 bash scripts/check-docs-reality.sh   # доки против кода: числа, ссылки, устаревшие утверждения
 bash scripts/lint-core-purity.sh     # стек-специфика в CORE (порог — ноль)
+bash scripts/lint-shell.sh           # синтаксис всех .sh: bash-файлы bash'ем, POSIX — dash'ем
 ```
+
+Все пять сразу — `bash scripts/verify-all.sh` (~28s, без fail-fast).
 
 ## Что где лежит
 
@@ -127,6 +130,17 @@ bash scripts/lint-core-purity.sh     # стек-специфика в CORE (по
   [docs/specify-implement-review.md](docs/specify-implement-review.md)
 - **Архитектурные решения (ADR)** → [docs/decisions.md](docs/decisions.md)
 - Агенту вход не здесь, а в `skeleton/CLAUDE.md.template`, раздел «Агенту на входе».
+
+## Scope: что входит, что — концерн проекта
+
+Границу стоит держать явной, иначе от шаблона ждут лишнего.
+
+**В шаблоне:** guides и sensors (хуки), внешнее состояние, spec-driven флоу, гигиена контекста,
+четыре яруса проверки, языковые слои.
+
+**Не в шаблоне, добавляется в проекте по реальной боли:** MCP-коннекторы, loop-автоматизации и
+worktree-параллелизм, мульти-агентная оркестрация, eval-слой на LLM-judge. Это не долг и не
+пробел: набор зависит от стека и от того, где у проекта болит.
 
 ## Когда НЕ нужно
 

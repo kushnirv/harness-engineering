@@ -619,9 +619,11 @@ check "маски тестов .NET, не JS" "$R" да
 grep -qE '^PYTEST_MODE|PYTHONDONTWRITEBYTECODE' "$PD/.harness.conf" && R=есть || R=нет
 check "python-строк в конфиге .NET-инстанса нет" "$R" нет
 
-LANG_FILES="$(ls "$PD/.claude/rules/lang/" 2>/dev/null | tr '\n' ' ')"
-[[ "$LANG_FILES" == "dotnet.md " ]] && R=только-свой || R="$LANG_FILES"
-check "приехал только dotnet.md" "$R" только-свой
+# Ожидаем ДВА файла: свой язык плюс shell.md. Второй — CORE и едет всегда, потому что
+# guard-хуки .NET-инстанса всё равно на shell. Сортировка нужна: порядок ls не гарантирован.
+LANG_FILES="$(ls "$PD/.claude/rules/lang/" 2>/dev/null | sort | tr '\n' ' ')"
+[[ "$LANG_FILES" == "dotnet.md shell.md " ]] && R=свой-и-shell || R="$LANG_FILES"
+check "приехали dotnet.md и shell.md, больше ничего" "$R" свой-и-shell
 
 # Пустой TEST_CMD у .NET законен. Сенсор обязан выйти, НЕ исполняя команду.
 # Проверка статическая и это не лень: успешная команда всё равно глушится mute-the-green,

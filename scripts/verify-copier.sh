@@ -93,8 +93,14 @@ check "*.template не протёк" "$TPL_LEAK" 0
 LANG_FILES="$(find "$OUT/.claude/rules/lang" -type f 2>/dev/null | grep -c . )"
 check "нужный языковой слой доехал (rules/lang непуст)" "$([[ "$LANG_FILES" -gt 0 ]] && echo да || echo нет)" да
 
-LANG_LEAK="$(find "$OUT/.claude/rules/lang" -type f 2>/dev/null | grep -vc 'vue' )"
-check "чужие языковые слои не протекли" "$LANG_LEAK" 0
+# `shell.md` из вычета исключён намеренно: он CORE и едет ВСЕГДА (харнесс любого проекта
+# состоит из .sh). Утечкой считается только чужой ЯЗЫК ПРОЕКТА — vue-инстанс не должен
+# получить dotnet.md. Без этого исключения проверка требовала бы не доставлять CORE-файл.
+LANG_LEAK="$(find "$OUT/.claude/rules/lang" -type f 2>/dev/null | grep -v 'shell\.md' | grep -vc 'vue' )"
+check "чужие языковые слои не протекли (shell.md — CORE, не утечка)" "$LANG_LEAK" 0
+
+SHELL_RULE="$([[ -f "$OUT/.claude/rules/lang/shell.md" ]] && echo да || echo нет)"
+check "shell.md доехал независимо от lang" "$SHELL_RULE" да
 
 echo
 echo "Рендер: $OUT"

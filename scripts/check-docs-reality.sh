@@ -341,6 +341,43 @@ while IFS= read -r f; do
 done < <(git ls-files '.claude/*' 2>/dev/null)
 check "догфуд-копии в .claude совпадают со skeleton" "" "$DOGDRIFT"
 
+# 25. Каждая ссылка `ADR-N` из кода и доков резолвится в реестре `docs/decisions.md`.
+# Проверка была описана в шапке реестра КОМАНДОЙ для ручного прогона — то есть существовала
+# как документация. Ровно этим она однажды и вскрыла ADR-13: на номер ссылались шесть мест,
+# записи не было ни одной. Ручной прогон повторяется, пока про него помнят.
+#
+# Сам реестр из источника ссылок исключён намеренно: его проза перечисляет НОМЕРА ЧУЖОГО дома
+# («здесь ADR-4, в вике — вика-ADR-11»), и они по определению не резолвятся здесь. Явная форма
+# `вика-ADR-N` отсекается отдельно — это ссылка на другой дом, а не на этот реестр.
+ADRDANGLE="$(python3 - <<'PY'
+import re, subprocess, os
+files = [f for f in subprocess.run(['git','ls-files','-z'], capture_output=True, text=True)
+         .stdout.split('\0') if f]
+reg = 'docs/decisions.md'
+known = set()
+if os.path.isfile(reg):
+    known = set(re.findall(r'^## (ADR-\d+)', open(reg, encoding='utf-8').read(), re.M))
+ref = re.compile(r'(вика-)?\b(ADR-\d+)')
+bad = {}
+for f in files:
+    if f == reg or f.startswith(('reports/', 'docs/plans/')):
+        continue
+    if not f.endswith(('.md', '.sh', '.yml', '.yaml', '.txt')):
+        continue
+    try:
+        lines = open(f, encoding='utf-8').read().splitlines()
+    except Exception:
+        continue
+    for i, line in enumerate(lines, 1):
+        for wiki, num in ref.findall(line):
+            if wiki or num in known:
+                continue
+            bad.setdefault(num, []).append(f'{f}:{i}')
+print(' '.join(f'{n}({",".join(v[:2])})' for n, v in sorted(bad.items())), end='')
+PY
+)"
+check "каждая ссылка ADR-N резолвится в реестре" "" "$ADRDANGLE"
+
 # N. Собственное число этого скрипта в доке. Числа verify-* сверяются прогоном (проверка 2), а
 # своё сидело в TODO непроверенным — единственное число в доках, за которым ничего не стояло.
 #
