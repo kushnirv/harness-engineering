@@ -24,4 +24,7 @@ CORE_PATHS=(
   "scripts/check-ac-refs.sh"
   "scripts/check-diff-coverage.sh"
   "scripts/load-context.sh"
+  # Смоук самого харнесса. Живёт с харнессом, а не в репе-шаблоне: проверять нечего там,
+  # где .claude/guards/ и .harness.conf отсутствуют.
+  "scripts/verify-harness.sh"
 )

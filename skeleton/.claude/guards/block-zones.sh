@@ -83,7 +83,7 @@ for zone in $READONLY_ZONES; do
   zone="${zone#/}"; zone="${zone%/}"            # снять обрамляющие слеши: "dist/" → "dist"
   [[ -z "$zone" ]] && continue                  # пустая зона после нормализации → пропустить
   # Матчим zone как ПОЛНЫЙ сегмент пути: обёртка /…/ + */zone/* ловит и top-level
-  # (dist/x), и вложенный (monorepo packages/ui-kit/dist/x), и саму папку (dist).
+  # (dist/x), и вложенный (monorepo packages/<пакет>/dist/x), и саму папку (dist).
   # Сегмент целиком, не префикс → НЕ ловит соседа distribution/. Работает для
   # абсолютного и относительного TARGET_FILE (обёртка нормализует границы).
   case "/${TARGET_FILE}/" in

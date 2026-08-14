@@ -58,10 +58,29 @@ pipx install copier
 ```mermaid
 flowchart LR
     A[".claude/"] --> B["правила для работы над шаблоном (dogfood)"]
-    C["skeleton/"] --> D["копируется в потребителя (ui-kit и др.)"]
+    C["skeleton/"] --> D["копируется в проекты-потребители"]
     style A fill:#f0f0f0
     style C fill:#e1f5ff
 ```
+
+### Четыре яруса проверки
+
+Ярусы отличаются охватом и ценой. Чем ниже номер, тем чаще срабатывает и тем дешевле должен быть.
+
+| Ярус | Когда | Охват | Чем реализован | Ставит ли шаблон |
+|---|---|---|---|---|
+| 0 | commit | staged-файлы | pre-commit проекта (линтер/форматтер) | **нет** — линтер у каждого стека свой |
+| 1 sensor | после Edit/Write | изменённый файл | `run-test-hook.sh`, `TEST_CMD` | да |
+| 2 gate | конец хода (Stop) | вся репа, без тестов | `gate.sh`, `GATE_CMD` — exit 2 держит ход | да |
+| 3 pre-push | `git push` | вся репа, полностью | `pre-push.sh` — 5 шагов | да, git-хук |
+
+Ярус 0 шаблон не ставит намеренно: он привязан к стеку, а харнесс language-agnostic. Дыра тут
+не молчаливая — пустой `GATE_CMD` или отсутствующий `SECRET_SCAN_CMD` хуки называют строкой
+в stderr, потому что молчаливое отсутствие проверки неотличимо от пройденной.
+
+Смоук самих ярусов в инстансе — `scripts/verify-harness.sh` (8 проверок: guard блокирует и
+пропускает, sensor и gate живы, `/note` на месте). В репе-шаблоне он выходит кодом 3
+«ничего не проверено»: харнесса тут не раскатано, проверять нечего.
 
 ### Runtime flow
 
@@ -158,6 +177,8 @@ harness-template/
 │   ├── PACKAGE_CLAUDE.md.template  ← guide пакета (generic)
 │   ├── .claude/
 │   │   ├── settings.json.template  ← хуки: PreToolUse(guard), PostToolUse(sensor), Stop(gate), UserPromptSubmit(nudge), SessionStart/End
+│   │   ├── agents/                 ← роли субагентов, instance-owned scaffold (ADR-13):
+│   │   │                              только по флагу `bootstrap.sh … --agents`, Copier их НЕ возит
 │   │   ├── guards/
 │   │   │   ├── block-zones.sh      ← guard: читает READONLY_ZONES
 │   │   │   ├── run-test-hook.sh    ← sensor: WATCH_DIR + TEST_CMD (пофайлово)
@@ -174,7 +195,7 @@ harness-template/
 │   │   ├── rules/                  ← common-core + per-language
 │   │   │   ├── common/             ← workflow, testing, git, methodology-routing,
 │   │   │   │                          context-hygiene, comments (всегда)
-│   │   │   └── lang/               ← vue.md, dotnet.md, go.md, php.md (paths-scoped)
+│   │   │   └── lang/               ← vue.md, dotnet.md, go.md, php.md, python.md (paths-scoped)
 │   │   └── docs/                   ← проектная память (JIT)
 │   │       ├── ARCHITECTURE.md.template  ← generic
 │   │       ├── REVIEW.md.template        ← чеклист + протокол сверки AC
@@ -192,9 +213,12 @@ harness-template/
 │   │   ├── load-context.sh         ← SessionStart: активные спеки + вика из личного конфига
 │   │   ├── log-append.sh           ← append записи в лог (не Edit: дифает файл целиком)
 │   │   ├── check-ac-refs.sh        ← сверка «AC-ID ↔ ссылка из теста», ratchet-порог
-│   │   └── check-diff-coverage.sh   ← покрытие ИЗМЕНЁННЫХ строк, ratchet-порог
+│   │   ├── check-diff-coverage.sh  ← покрытие ИЗМЕНЁННЫХ строк, ratchet-порог
+│   │   └── verify-harness.sh       ← смоук инстанса (guard exit 2, sensor/gate живы, /note)
+│   ├── docs/specs/_template.md     ← шаблон спеки (CORE, едет всем: AC-ID + флоу среза)
+│   ├── .husky/pre-push             ← опция для команд, шарящих хуки через package.json
+│   ├── .copier-answers.yml.jinja   ← источник ответов Copier в инстансе (НЕ игнорировать)
 │   └── .harness.conf.example       ← все параметры с комментариями
-├── examples/minimal/               ← рабочий минимальный пример
 ├── scripts/
 │   ├── bootstrap.sh                ← раскатка инстанса: второй канал доставки, не только Copier
 │   ├── harness-status.sh           ← замер дрейфа инстанс ↔ шаблон (DIVERGED ≠ «инстанс старее»)
@@ -202,15 +226,22 @@ harness-template/
 │   ├── lint-core-purity.sh         ← гейт чистоты CORE в точке подъёма (денилист + ratchet)
 │   ├── core-denylist.txt           ← стек-токены: замер без файла не воспроизводится
 │   ├── lib/layers.sh               ← CORE_PATHS: что обязано доехать до потребителя
-│   ├── verify-harness.sh           ← smoke test инстанса (guard exit 2, sensor green, /note)
+│   ├── verify-all.sh               ← Ярус 3 этой репы: все четыре самопроверки одной командой
 │   ├── verify-bootstrap.sh         ← самопроверка канала bootstrap
 │   ├── verify-copier.sh            ← самопроверка канала Copier (CORE_PATHS = источник истины)
 │   └── check-docs-reality.sh       ← доки против факта: устаревшие утверждения, ссылки, числа
 └── docs/specify-implement-review.md ← методология Specify → Implement → Review
 ```
 
-**Три яруса:** абстрактный `skeleton/` (ядро) → минимальный `examples/minimal/` →
-реальный instance (`turbo-omni/packages/ui-kit`, Vue).
+**Два уровня абстракции** (не «ярусы» — это слово занято ступенями проверки 0–3):
+абстрактный `skeleton/` (ядро) → реальный instance (пакет Vue-монорепо).
+
+Третьим был `examples/minimal/` — «рабочий минимальный пример». **Удалён 14.08:** синка у него не
+было (один коммит от 02.06), ни одна проверка туда не заглядывала, и он отдавал НЕработающий
+guard, обещая exit 2. Оба его хука читали из hook-JSON поле `path`, тогда как Claude Code
+присылает `file_path` — проверено реальным payload'ом: пример 0, skeleton 2. Плюс guard стоял на
+PostToolUse, где блокировать уже нечего. Смотреть глазами без разворота теперь нечем; вместо этого
+`bash scripts/bootstrap.sh <имя> none` в пустой папке — 2 секунды и настоящий инстанс.
 
 ## Language-agnostic: common-core + per-language
 

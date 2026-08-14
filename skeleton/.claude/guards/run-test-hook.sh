@@ -5,9 +5,9 @@
 # При провале: additionalContext → system reminder в агент.
 #
 # Конфиг (.harness.conf):
-#   WATCH_DIR — директория (напр. "packages/ui-kit/lib")
+#   WATCH_DIR — директория (напр. "packages/<пакет>/lib" или "src")
 #   TEST_CMD  — команда тестов (напр. "npx vitest related --run")
-#   TEST_WORKDIR — откуда запускать TEST_CMD (напр. "packages/ui-kit")
+#   TEST_WORKDIR — откуда запускать TEST_CMD (напр. "packages/<пакет>")
 
 set -euo pipefail
 

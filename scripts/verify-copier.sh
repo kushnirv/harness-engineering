@@ -86,6 +86,13 @@ check ".claude/agents не доставлен" "$R" нет
 TPL_LEAK="$(find "$OUT" -name '*.template' -type f 2>/dev/null | grep -c . )"
 check "*.template не протёк" "$TPL_LEAK" 0
 
+# Две проверки, а не одна. Утверждение «чужого нет» на ПУСТОМ каталоге верно и бессмысленно:
+# `find | grep -vc` на пустом входе даёт 0, и проверка проходила бы, даже если не доехало
+# НИЧЕГО (нашло независимое ревью 14.08 мутацией «убрать vue.md из доставки»). Сначала
+# убеждаемся, что нужный слой на месте, и только потом — что лишнего нет.
+LANG_FILES="$(find "$OUT/.claude/rules/lang" -type f 2>/dev/null | grep -c . )"
+check "нужный языковой слой доехал (rules/lang непуст)" "$([[ "$LANG_FILES" -gt 0 ]] && echo да || echo нет)" да
+
 LANG_LEAK="$(find "$OUT/.claude/rules/lang" -type f 2>/dev/null | grep -vc 'vue' )"
 check "чужие языковые слои не протекли" "$LANG_LEAK" 0
 

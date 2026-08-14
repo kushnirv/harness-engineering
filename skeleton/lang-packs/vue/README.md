@@ -31,7 +31,12 @@ cp skeleton/.harness.conf.example ./.harness.conf
 
 # 2. Наложить Vue-пакет
 cp -r skeleton/lang-packs/vue/skills/add-component ./.claude/skills/
-cp skeleton/lang-packs/vue/docs/*.template ./.claude/docs/
+#    ИМЯ БЕЗ .template: правила зовут `.claude/docs/design-conformance.md`, а не
+#    `design-conformance.md.template` — копия «как есть» оставляет ссылки битыми
+for f in skeleton/lang-packs/vue/docs/*.md.template; do
+  cp "$f" "./.claude/docs/$(basename "$f" .template)"
+done
+#    потом заполнить плейсхолдеры внутри скопированных доков
 #    rules/lang/vue.md уже в ядре — оставить, удалить go.md/php.md если не нужны
 ```
 
