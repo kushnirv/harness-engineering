@@ -13,7 +13,7 @@
 ## Версионируемый sync (Copier)
 
 CORE-слой синкается через [Copier](https://copier.readthedocs.io): guards,
-skills/{plan,rename,note,end-session,task}, rules/common **и `scripts/` — четыре скрипта, на
+skills/{plan,rename,note,end-session,task}, rules/common **и `scripts/` — 7 скриптов, на
 которые CORE-правила ссылаются напрямую**. Состав CORE задан списком `CORE_PATHS` в
 `scripts/lib/layers.sh`, он же источник истины для самопроверки обоих каналов.
 
@@ -180,10 +180,13 @@ harness-template/
 │   ├── .claude/
 │   │   ├── settings.json.template  ← хуки: PreToolUse(guard), PostToolUse(sensor), Stop(gate), UserPromptSubmit(nudge), SessionStart/End
 │   │   ├── agents/                 ← роли субагентов, instance-owned scaffold (ADR-13):
-│   │   │                              только по флагу `bootstrap.sh … --agents`, Copier их НЕ возит
+│   │   │                              Explore, bug-triage, challenger + доменное ревью
+│   │   │                              (arbiter, lens-contracts, lens-tests) — только по флагу
+│   │   │                              `bootstrap.sh … --agents`, Copier их НЕ возит
 │   │   ├── guards/
 │   │   │   ├── block-zones.sh      ← guard: читает READONLY_ZONES
 │   │   │   ├── block-large-edit.sh ← guard: Edit крупного файла блокирует, крупный Write предупреждает
+│   │   │   ├── log-instructions.sh ← InstructionsLoaded: пишет, какое правило и почему загрузилось
 │   │   │   ├── run-test-hook.sh    ← sensor: WATCH_DIR + TEST_CMD (пофайлово)
 │   │   │   ├── run-pytest-hook.sh  ← sensor-вариант для python (PYTEST_MODE)
 │   │   │   ├── gate.sh             ← gate Ярус 2: GATE_CMD без тестов (Stop + база pre-push, loop-safe)
@@ -214,7 +217,10 @@ harness-template/
 │   │   ├── vue/                    ← add-component, dev-guide, Vue-ревью, FSD, макеты, real-runtime
 │   │   └── dotnet/                 ← .editorconfig с явной severity, чеклист ревью C#
 │   ├── scripts/                    ← CORE-скрипты, едут оба канала
-│   │   ├── load-context.sh         ← SessionStart: активные спеки + вика из личного конфига
+│   │   ├── instructions-report.sh      ← читает лог загрузок: фильтрует ли `paths:` на самом деле
+│   ├── gotchas-partition.sh        ← разбивает реестр ловушек по карте, лишнее в архив
+│   ├── gotchas-partition.map.template ← карта раскладки (методология + пример)
+│   ├── load-context.sh         ← SessionStart: активные спеки + вика из личного конфига
 │   │   ├── log-append.sh           ← append записи в лог (не Edit: дифает файл целиком)
 │   │   ├── check-ac-refs.sh        ← сверка «AC-ID ↔ ссылка из теста», ratchet-порог
 │   │   ├── check-diff-coverage.sh  ← покрытие ИЗМЕНЁННЫХ строк, ratchet-порог

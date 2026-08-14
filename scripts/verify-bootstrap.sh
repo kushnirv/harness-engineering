@@ -32,6 +32,18 @@ check() {
   fi
 }
 
+# Правка конфига пробы: `sed -i` несовместим между платформами — BSD (macOS) требует аргумент
+# суффикса (`sed -i ''`), GNU (Linux, а значит и любой CI-раннер) на этот же вызов падает
+# с «invalid command code». Скрипт гоняется у владельца на macOS, поэтому дефект был невидим:
+# первый прогон в Linux-CI или у контрибьютора уронил бы весь сьют на непонятной ошибке.
+# Тот же урок уже записан в skeleton/scripts/log-append.sh — здесь он просто не был применён.
+# Пишем через временный файл: работает одинаково везде и не зависит от диалекта -i.
+conf_set() {
+  local file="$1" expr="$2" tmp
+  tmp="$(mktemp)"
+  sed "$expr" "$file" > "$tmp" && mv "$tmp" "$file"
+}
+
 P="$(mktemp -d)"
 # Нормализация обязательна: mktemp отдаёт /var/..., а git rev-parse внутри той же
 # папки вернёт /private/var/... (/var — симлинк на macOS). Хуки сравнивают пути
@@ -176,11 +188,11 @@ check "SECRET_SCAN_CMD в конфиге есть" "$R" yes
 # Дальше проверяется САМ guard — порядок шагов и реакция на коды выхода. Реальные ruff и
 # pytest тут только замедляют: четыре прогона по несколько минут, а при сломанном порядке
 # (мутация) прогон вообще перестаёт заканчиваться. Подменяем на дешёвые, в конце возвращаем.
-sed -i '' 's|^GATE_CMD=.*|GATE_CMD="true"|' "$P/.harness.conf"
+conf_set "$P/.harness.conf" 's|^GATE_CMD=.*|GATE_CMD="true"|'
 # Тесты ЗЕЛЁНЫЕ и оставляют след. Падающие тесты делали проверку «падение скана блокирует»
 # декоративной: ненулевой код давали они, и проверка показывала «блокирует» даже там, где
 # секрет-скана в guard не было вовсе.
-sed -i '' 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="echo ТЕСТЫ-ПОШЛИ"|' "$P/.harness.conf"
+conf_set "$P/.harness.conf" 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="echo ТЕСТЫ-ПОШЛИ"|'
 
 # `</dev/null` во всех прогонах ниже: gate.sh читает stdin до EOF, и с открытым stdin
 # проверка висит вместо того, чтобы дать вердикт.
@@ -190,11 +202,11 @@ sed -i '' 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="echo ТЕСТЫ-ПОШЛИ"|' "$P/
 # такой JSON — гейт обязан отработать всё равно.
 # Гейт делаем ПАДАЮЩИМ: при успехе он молчит (mute the green), и метка в выводе не появилась
 # бы даже на исправном guard — проверка краснела бы всегда.
-sed -i '' 's|^GATE_CMD=.*|GATE_CMD="echo ГЕЙТ-ПОШЁЛ; false"|' "$P/.harness.conf"
+conf_set "$P/.harness.conf" 's|^GATE_CMD=.*|GATE_CMD="echo ГЕЙТ-ПОШЁЛ; false"|'
 PP_OUT="$(printf '{"stop_hook_active": true}' | (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1)"
 [[ "$PP_OUT" == *"ГЕЙТ-ПОШЁЛ"* ]] && R=yes || R=no
 check "stdin вызывающего не утекает в gate" "$R" yes
-sed -i '' 's|^GATE_CMD=.*|GATE_CMD="true"|' "$P/.harness.conf"
+conf_set "$P/.harness.conf" 's|^GATE_CMD=.*|GATE_CMD="true"|'
 
 # Пустой SECRET_SCAN_CMD: push не блокируется, но и не молчит — иначе отсутствие скана
 # неотличимо от пройденного.
@@ -204,7 +216,7 @@ check "про отсутствие скана сказано вслух" "$R" ye
 
 # Падение скана обязано остановить push. Тесты зелёные, поэтому ненулевой код может прийти
 # только от скана.
-sed -i '' 's|^SECRET_SCAN_CMD=.*|SECRET_SCAN_CMD="false"|' "$P/.harness.conf"
+conf_set "$P/.harness.conf" 's|^SECRET_SCAN_CMD=.*|SECRET_SCAN_CMD="false"|'
 ( (cd "$P" && sh .claude/guards/pre-push.sh) >/dev/null 2>&1 </dev/null ) && R=прошло || R=упало
 check "падение скана блокирует push" "$R" упало
 
@@ -215,7 +227,7 @@ PP_OUT="$( (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1 </dev/null )"
 check "скан отрабатывает до тестов" "$R" не-дошло
 
 # Зелёный скан пропускает дальше.
-sed -i '' 's|^SECRET_SCAN_CMD=.*|SECRET_SCAN_CMD="true"|' "$P/.harness.conf"
+conf_set "$P/.harness.conf" 's|^SECRET_SCAN_CMD=.*|SECRET_SCAN_CMD="true"|'
 PP_OUT="$( (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1 </dev/null )"
 [[ "$PP_OUT" == *"ТЕСТЫ-ПОШЛИ"* ]] && R=да || R=нет
 check "зелёный скан пускает к тестам" "$R" да
@@ -270,9 +282,9 @@ check "без stdin gate про AC молчит (нет дубля на push)" "
 printf '# AC-001 — ссылка из теста для Яруса 3\n' > "$AC_PROBE_FILE"
 
 # Конфиг возвращаем: дальше по нему проверяют сенсор, гейт и smoke.
-sed -i '' 's|^SECRET_SCAN_CMD=.*|SECRET_SCAN_CMD=""|' "$P/.harness.conf"
-sed -i '' 's|^GATE_CMD=.*|GATE_CMD="uv run ruff check . \&\& uv run ruff format --check ."|' "$P/.harness.conf"
-sed -i '' 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="uv run pytest"|' "$P/.harness.conf"
+conf_set "$P/.harness.conf" 's|^SECRET_SCAN_CMD=.*|SECRET_SCAN_CMD=""|'
+conf_set "$P/.harness.conf" 's|^GATE_CMD=.*|GATE_CMD="uv run ruff check . \&\& uv run ruff format --check ."|'
+conf_set "$P/.harness.conf" 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="uv run pytest"|'
 
 echo "== Покрытие изменённых строк =="
 
@@ -419,7 +431,7 @@ rm -rf "$LCP"
 check "load-context не падает без HOME" "$R" 0
 
 # Регресс: пустой GATE_TEST_CMD молчал, хотя не запускавшиеся тесты неотличимы от прошедших.
-sed -i '' 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD=""|' "$P/.harness.conf"
+conf_set "$P/.harness.conf" 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD=""|'
 PP_OUT="$( (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1 </dev/null )"
 [[ "$PP_OUT" == *"GATE_TEST_CMD пуст"* ]] && R=сказал || R=промолчал
 check "пустой GATE_TEST_CMD назван вслух" "$R" сказал
@@ -430,7 +442,7 @@ PP_OUT="$( (cd "$P" && sh .claude/guards/pre-push.sh) 2>&1 </dev/null )"
 [[ "$PP_OUT" == *"check-diff-coverage.sh нет"* ]] && R=сказал || R=промолчал
 check "отсутствие чекера покрытия названо вслух" "$R" сказал
 mv "$P/scripts/.hidden-dc" "$P/scripts/check-diff-coverage.sh"
-sed -i '' 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="uv run pytest"|' "$P/.harness.conf"
+conf_set "$P/.harness.conf" 's|^GATE_TEST_CMD=.*|GATE_TEST_CMD="uv run pytest"|'
 
 echo "== SessionStart: фаза работы и личный слой =="
 
@@ -560,9 +572,32 @@ check "MOC отделяет круги чтения от ярусов прове
 grep -q "Проектная документация" "$P/CLAUDE.md" 2>/dev/null && R=yes || R=no
 check "карта доков в CLAUDE.md есть" "$R" yes
 
-# @-импорт затянул бы каркас в контекст на старте каждой сессии. Страховка от регресса.
-if grep -qE "^@|[[:space:]]@\.claude/docs|[[:space:]]@docs/" "$P/CLAUDE.md" 2>/dev/null; then R=есть; else R=нет; fi
-check "@-импортов в CLAUDE.md нет" "$R" нет
+# @-импорт ДОКОВ затянул бы каркас в контекст на старте каждой сессии. Страховка от регресса.
+#
+# Блоки кода исключаются, и это не поблажка: парсер импортов Claude Code сам пропускает code
+# spans и fenced-блоки (официальная дока, memory). Проверка, краснеющая на ПРИМЕРЕ внутри блока
+# кода, строже реальности — то есть ложный красный, а его обходят вместе с проверкой. Поймано
+# 14.08 на примере совместимости с AGENTS.md, который шаблон показывает как рекомендованный.
+IMPORTS="$(CLAUDE_MD="$P/CLAUDE.md" python3 -c '
+import os, re
+fence = chr(96) * 3
+try:
+    lines = open(os.environ["CLAUDE_MD"], encoding="utf-8").read().splitlines()
+except OSError:
+    print(""); raise SystemExit
+inside, bad = False, []
+for i, line in enumerate(lines, 1):
+    if line.lstrip().startswith(fence):
+        inside = not inside
+        continue
+    if inside:
+        continue
+    if re.search(r"(^|\s)@(\.claude/)?docs/", line) or re.match(r"^@", line):
+        bad.append(str(i))
+print(" ".join(bad))
+')"
+[[ -z "$IMPORTS" ]] && R=нет || R="есть (строки: $IMPORTS)"
+check "@-импортов доков в CLAUDE.md нет (примеры в блоках кода не считаются)" "$R" нет
 
 echo "== Сенсор в деле =="
 mkdir -p "$P/src/probe" "$P/tests"
@@ -697,11 +732,13 @@ PA="$(mktemp -d)"; PA="$(cd "$PA" && pwd -P)"
 # отсутствующей папке (или grep без совпадений) убил бы скрипт до печати итога.
 # Найдено прогоном 30.07 — обрыв вывода без единого FAIL.
 AGENT_COUNT=$(ls -1 "$PA/.claude/agents/" 2>/dev/null | grep -c '\.md$' || true)
-# Две, а не семь: четыре core-роли уехали в плагин (ADR-14), в шаблоне остались уникальные.
+# 14.08 из боевого инстанса поднято четыре: `challenger` (adversarial-проверка находок) и три
+# роли доменного ревью — `arbiter`, `lens-contracts`, `lens-tests`. Линза состояния в ядро НЕ
+# пошла: её предмет привязан к UI-стеку, она уехала в lang-pack vue.
 # Раньше ассерт ждал ТРИ и объяснял число ролями — третьим файлом был README пакета, который
 # глоб затаскивал в рантайм-каталог. Тест закреплял дефект: починишь bootstrap — покраснеет
 # на правильном поведении (ревью 14.08).
-check "с флагом --agents приехало 2 файла ролей" "$AGENT_COUNT" 2
+check "с флагом --agents приехало 6 файлов ролей" "$AGENT_COUNT" 6
 
 # Считать файлы мало: дефект был именно в ПРИРОДЕ файла, а не в их числе. Определение субагента
 # начинается с YAML-фронтматтера; всё остальное в этой папке — мусор для рантайма.
@@ -713,8 +750,11 @@ done
 check "в agents нет файлов без фронтматтера" "$NO_FM" ""
 
 # Уникальные роли на месте, core-ролей тут быть НЕ должно: их канон в плагине (ADR-14).
-[[ -f "$PA/.claude/agents/bug-triage.md" && -f "$PA/.claude/agents/Explore.md" ]] && R=yes || R=no
-check "уникальные роли на месте (bug-triage, Explore)" "$R" yes
+MISSING_ROLE=""
+for role in bug-triage Explore challenger arbiter lens-contracts lens-tests; do
+  [[ -f "$PA/.claude/agents/${role}.md" ]] || MISSING_ROLE="$MISSING_ROLE $role"
+done
+check "уникальные роли на месте (шесть, без плагинных)" "$MISSING_ROLE" ""
 
 ls "$PA/.claude/agents/" 2>/dev/null | grep -qE '^(reviewer|scout|researcher|scribe)\.md$' && R=есть || R=нет
 check "дублей core-ролей в инстансе нет" "$R" нет

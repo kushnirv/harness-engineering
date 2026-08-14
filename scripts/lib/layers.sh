@@ -3,6 +3,8 @@
 CORE_PATHS=(
   ".claude/guards/block-zones.sh"
   ".claude/guards/block-large-edit.sh"
+  # Пара «пишет лог загрузок / читает лог»: порознь бессмысленны, поэтому едут вместе.
+  ".claude/guards/log-instructions.sh"
   ".claude/guards/gate.sh"
   ".claude/guards/run-test-hook.sh"
   ".claude/guards/nudge.sh"
@@ -29,6 +31,8 @@ CORE_PATHS=(
   "scripts/check-ac-refs.sh"
   "scripts/check-diff-coverage.sh"
   "scripts/load-context.sh"
+  "scripts/instructions-report.sh"
+  "scripts/gotchas-partition.sh"
   # Смоук самого харнесса. Живёт с харнессом, а не в репе-шаблоне: проверять нечего там,
   # где .claude/guards/ и .harness.conf отсутствуют.
   "scripts/verify-harness.sh"

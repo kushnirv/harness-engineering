@@ -320,6 +320,13 @@ ensure_core_script verify-harness.sh "смоук: guard блокирует, sens
 echo 0 > scripts/check-ac-refs.baseline
 echo 0 > scripts/check-diff-coverage.baseline
 
+# Карта раскладки реестра ловушек. Суффикс `.template` снимаем: скрипт зовёт файл по имени
+# `gotchas-partition.map`, а копия «как есть» оставила бы его без карты — то есть при первом
+# прогоне весь реестр уехал бы в архив.
+if [[ -f "$TPL/skeleton/scripts/gotchas-partition.map.template" ]]; then
+  cp "$TPL/skeleton/scripts/gotchas-partition.map.template" scripts/gotchas-partition.map
+fi
+
 # Активация Яруса 3. Логика — в .claude/guards/pre-push.sh (версионируется, едет обоими
 # каналами), тут только включение: git-хук работает на любом стеке и не требует npm.
 # husky остаётся опцией для команд, которые шарят хуки через package.json.
