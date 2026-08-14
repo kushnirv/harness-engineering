@@ -88,6 +88,8 @@ flowchart LR
 flowchart TD
     A["Edit/Write/Bash"] --> B["PreToolUse"]
     B --> C["block-zones.sh"]
+    B --> C2["block-large-edit.sh<br/>(Edit → блок, Write → warn)"]
+    C2 --> D
     C --> D{разрешено?}
     D -->|нет| E["GUARD BLOCKED (exit 2)"]
     D -->|да| F["PostToolUse"]
@@ -181,6 +183,7 @@ harness-template/
 │   │   │                              только по флагу `bootstrap.sh … --agents`, Copier их НЕ возит
 │   │   ├── guards/
 │   │   │   ├── block-zones.sh      ← guard: читает READONLY_ZONES
+│   │   │   ├── block-large-edit.sh ← guard: Edit крупного файла блокирует, крупный Write предупреждает
 │   │   │   ├── run-test-hook.sh    ← sensor: WATCH_DIR + TEST_CMD (пофайлово)
 │   │   │   ├── run-pytest-hook.sh  ← sensor-вариант для python (PYTEST_MODE)
 │   │   │   ├── gate.sh             ← gate Ярус 2: GATE_CMD без тестов (Stop + база pre-push, loop-safe)

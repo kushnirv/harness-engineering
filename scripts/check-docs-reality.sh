@@ -378,6 +378,42 @@ PY
 )"
 check "каждая ссылка ADR-N резолвится в реестре" "" "$ADRDANGLE"
 
+# 26. Каждый доставляемый guard кем-то ВЫЗЫВАЕТСЯ. Дыра нашлась подъёмом block-large-edit.sh:
+# файл доехал обоими каналами, прошёл чистоту CORE и смоук — и ни одна проверка не спросила,
+# висит ли он на событии. Guard, который не подключён, неотличим от работающего: он молчит,
+# а молчание guard'а — это его штатное поведение при успехе (mute the green).
+#
+# Два законных исключения, оба с механизмом вызова вне settings.json:
+#   pre-push.sh       — зовёт git-хук, который ставит bootstrap;
+#   run-pytest-hook.sh — bootstrap подставляет его ИМЯ вместо run-test-hook.sh при lang=python.
+# Список исключений держим здесь, а не в скрипте-источнике: расширять его надо осознанно, и
+# каждое добавление обязано назвать, кто вызывает файл.
+GUARDDEAD="$(python3 - <<'PY'
+import os, re
+conf = 'scripts/lib/layers.sh'
+settings = 'skeleton/.claude/settings.json.template'
+boot = 'scripts/bootstrap.sh'
+core = re.findall(r'"(\.claude/guards/[^"]+\.sh)"', open(conf, encoding='utf-8').read())
+s = open(settings, encoding='utf-8').read() if os.path.isfile(settings) else ''
+b = open(boot, encoding='utf-8').read() if os.path.isfile(boot) else ''
+allowed = {'pre-push.sh', 'run-pytest-hook.sh'}
+dead = []
+for path in core:
+    name = os.path.basename(path)
+    if name in allowed:
+        # исключение законно только пока его вызыватель существует
+        if name == 'pre-push.sh' and 'pre-push' not in b:
+            dead.append(f'{name}(bootstrap больше не ставит git-хук)')
+        if name == 'run-pytest-hook.sh' and 'run-pytest-hook' not in b:
+            dead.append(f'{name}(bootstrap больше не подставляет)')
+        continue
+    if name not in s:
+        dead.append(f'{name}(не подключён в settings.json.template)')
+print(' '.join(dead), end='')
+PY
+)"
+check "каждый CORE-guard вызывается" "" "$GUARDDEAD"
+
 # N. Собственное число этого скрипта в доке. Числа verify-* сверяются прогоном (проверка 2), а
 # своё сидело в TODO непроверенным — единственное число в доках, за которым ничего не стояло.
 #

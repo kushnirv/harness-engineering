@@ -2,6 +2,7 @@
 # Пути CORE-слоя относительно корня инстанса. Только это синкается.
 CORE_PATHS=(
   ".claude/guards/block-zones.sh"
+  ".claude/guards/block-large-edit.sh"
   ".claude/guards/gate.sh"
   ".claude/guards/run-test-hook.sh"
   ".claude/guards/nudge.sh"
