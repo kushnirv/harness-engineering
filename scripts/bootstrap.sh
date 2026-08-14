@@ -135,8 +135,33 @@ command -v copier >/dev/null || { echo "нужен copier: uv tool install copie
 copier copy --trust --defaults --overwrite --vcs-ref HEAD \
   --data project_name="$NAME" --data lang="$LANG_PACK" "$TPL" . >/dev/null
 
-# Дорендер трёх файлов. Незаменённый плейсхолдер ломает харнесс молча,
-# поэтому подставляются все шесть, включая пустой WIKI_PATH.
+# `_src_path` copier записывает тем путём, которым его позвали, а зовём мы локальным
+# абсолютным. Два следствия, и первое хуже: `copier update` в этом инстансе работает только
+# там, где существует ровно этот каталог — то есть у всех, кроме раскатывавшего, синк мёртв.
+# Второе: путь с чужой машины (а с ним имя пользователя и организации) уезжает в проект.
+# Есть remote у шаблона — подставляем URL, он валиден для всех.
+TPL_REMOTE="$(git -C "$TPL" config --get remote.origin.url 2>/dev/null || true)"
+if [[ -n "$TPL_REMOTE" && -f .copier-answers.yml ]]; then
+  TPL_REMOTE="$TPL_REMOTE" python3 - <<'PY'
+import os, re
+url = os.environ["TPL_REMOTE"]
+p = ".copier-answers.yml"
+s = open(p, encoding="utf-8").read()
+s2 = re.sub(r'^_src_path:.*$', "_src_path: " + url, s, count=1, flags=re.M)
+if s2 != s:
+    open(p, "w", encoding="utf-8").write(s2)
+PY
+else
+  echo "HARNESS: у шаблона нет remote.origin — _src_path остался локальным путём," >&2
+  echo "         значит copier update сработает только на этой машине." >&2
+fi
+
+# Дорендер трёх файлов. Незаменённый плейсхолдер ломает харнесс молча, поэтому список замен
+# держим полным: чего в нём нет — то и приедет в инстанс угловыми скобками.
+# `<WIKI_PATH>` из списка убран 14.08 вместе с самим плейсхолдером: он подставлялся ПУСТОТОЙ
+# всегда (личный путь в версионируемый файл попадать не должен), и промпт SessionEnd в итоге
+# велел дописывать лог в `/log` — в корень файловой системы. Адрес вики теперь берётся в рантайме
+# из личного конфига `~/.harness/`, шаблон его не знает вовсе.
 render() {
   sed -e "s|<PROJECT_NAME>|$NAME|g" \
       -e "s|{{PROJECT}}|$NAME|g" \
@@ -161,8 +186,7 @@ render() {
       -e "s|<DATA_INVARIANT>|$TODO_MARK|g" \
       -e "s|<MAIN_FLOW>|$TODO_MARK|g" \
       -e "s|<STATE_TRANSITIONS>|$TODO_MARK|g" \
-      -e "s|<ACCESS_RULES>|$TODO_MARK|g" \
-      -e "s|<WIKI_PATH>||g" "$1"
+      -e "s|<ACCESS_RULES>|$TODO_MARK|g" "$1"
 }
 
 render "$TPL/skeleton/CLAUDE.md.template" > CLAUDE.md
@@ -195,26 +219,39 @@ LOG
 
 if [[ "$WITH_AGENTS" == yes ]]; then
   mkdir -p .claude/agents
-  cp "$TPL/skeleton/.claude/agents/"*.md .claude/agents/
+  # Только файлы с YAML-фронтматтером: Claude Code читает `.claude/agents/*.md` как ОПРЕДЕЛЕНИЯ
+  # субагентов, а глоб `*.md` тащил туда ещё и README пакета — документацию в рантайм-каталог.
+  # Ревью 14.08 нашло хуже самой протечки: ассерт в verify-bootstrap ждал «3 файла» и объяснял
+  # число ролями, хотя ролей две. Тест закрепил дефект как контракт.
+  for AGENT_FILE in "$TPL/skeleton/.claude/agents/"*.md; do
+    [[ -f "$AGENT_FILE" ]] || continue
+    [[ "$(head -1 "$AGENT_FILE")" == "---" ]] || continue
+    cp "$AGENT_FILE" .claude/agents/
+  done
 fi
 
 cat > docs/MOC.md <<'MOC'
 # MOC — карта проекта
 
-> В каком порядке это читать. Ярусы по времени, не по важности:
-> ярус 0 достаточен, чтобы начать работу.
+> В каком порядке это читать. Круги по времени, не по важности:
+> круга 0 достаточно, чтобы начать работу.
+>
+> Круги — про чтение. Слово «ярус» в этом харнессе занято другим: ярусы 0–3 это ступени
+> проверки (pre-commit → sensor → gate → pre-push), см. `.claude/rules/common/testing.md`.
+> Раньше обе шкалы назывались ярусами, и в одном проекте жили «ярус 0 = начни отсюда» и
+> «ярус 0 = линт на коммите».
 
-## Ярус 0 — минимум перед первой правкой
+## Круг 0 — минимум перед первой правкой
 
 - `CLAUDE.md` — правила и роутинг, грузится всегда
 - `docs/specs/spec-*.md` — активная спека среза. Нет спеки → код не начинаем
 
-## Ярус 1 — устройство проекта
+## Круг 1 — устройство проекта
 
 - `.claude/docs/ARCHITECTURE.md` — стек, структура, инварианты, модель данных, бизнес-логика
 - `docs/log.md` — что происходило и что удивило
 
-## Ярус 2 — по нужде
+## Круг 2 — по нужде
 
 - `.claude/docs/gotchas.md` — правила, найденные на реальной работе (§-нумерация)
 - `.claude/docs/REVIEW.md` — чеклист ревью
@@ -252,7 +289,7 @@ DIFF_COVER_BASE=""
 DIFF_COVER_BASELINE="\$REPO_ROOT/scripts/check-diff-coverage.baseline"
 CONF
 
-# Эти четыре скрипта уже привозит `copier copy` выше — `scripts` в `_exclude` не входит.
+# Эти пять скриптов уже привозит `copier copy` выше — `scripts` в `_exclude` не входит.
 # Безусловный `cp` тут был мёртвым шагом: перезаписывал файл тем же содержимым. Оставлена
 # СТРАХОВКА с диагностикой: если copier его не привёз (кто-то добавил путь в `_exclude`), файл
 # всё равно появится, но расхождение будет названо вслух, а не замаскировано копией.
@@ -273,13 +310,22 @@ ensure_core_script load-context.sh "SessionStart: активные спеки и
 ensure_core_script log-append.sh "append в лог вместо Edit"
 # На него ссылается шаблон спеки (docs/specs/_template.md).
 ensure_core_script check-ac-refs.sh "сверка критерий приёмки ↔ тест"
-# Ярус 3, шаг 4.
+# Ярус 3, шаг 5 (покрытие идёт последним: отчёт создают тесты шага 4).
 ensure_core_script check-diff-coverage.sh "покрытие изменённых строк"
+# Смоук харнесса: README посылает сюда после раскатки.
+ensure_core_script verify-harness.sh "смоук: guard блокирует, sensor/gate живы, /note на месте"
 
 # Пороги ratchet. На свежем инстансе непокрытых нуль, поэтому ноль честен. Без файла скрипты
 # считают порогом ноль и предупреждают об отсутствии — лучше создать явно.
 echo 0 > scripts/check-ac-refs.baseline
 echo 0 > scripts/check-diff-coverage.baseline
+
+# Карта раскладки реестра ловушек. Суффикс `.template` снимаем: скрипт зовёт файл по имени
+# `gotchas-partition.map`, а копия «как есть» оставила бы его без карты — то есть при первом
+# прогоне весь реестр уехал бы в архив.
+if [[ -f "$TPL/skeleton/scripts/gotchas-partition.map.template" ]]; then
+  cp "$TPL/skeleton/scripts/gotchas-partition.map.template" scripts/gotchas-partition.map
+fi
 
 # Активация Яруса 3. Логика — в .claude/guards/pre-push.sh (версионируется, едет обоими
 # каналами), тут только включение: git-хук работает на любом стеке и не требует npm.

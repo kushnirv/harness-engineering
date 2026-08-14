@@ -39,7 +39,11 @@ cp -r skeleton/.claude ./
 cp skeleton/.harness.conf.example ./.harness.conf
 
 # 2. Этот пакет
-cp skeleton/lang-packs/dotnet/docs/*.template ./.claude/docs/
+#    ИМЯ БЕЗ .template: правила зовут `.claude/docs/<имя>.md`, копия «как есть»
+#    оставляет ссылки битыми
+for f in skeleton/lang-packs/dotnet/docs/*.md.template; do
+  cp "$f" "./.claude/docs/$(basename "$f" .template)"
+done
 cp skeleton/lang-packs/dotnet/.editorconfig.template ./.editorconfig
 #    подставить <PROJECT_NAME>, прочитать комментарии про severity и решить по каждой строке
 

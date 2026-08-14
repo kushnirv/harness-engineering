@@ -17,6 +17,11 @@ lang-packs/vue/
     └── chrome-devtools-workflow.md.template ← добить UI до real-runtime
 ```
 
+`agents/lens-state.md` — линза доменного ревью про состояние и реактивность. В ядре её нет
+намеренно: три из пяти пунктов предмета (вычисление вне `computed`, деструктуризация пропа,
+ремаунт против обновления) привязаны к стеку, обобщение размыло бы предмет. Копируется в
+`.claude/agents/` того проекта, который использует доменное ревью; свод делает `arbiter` из ядра.
+
 Правила Vue (что грузится агенту автоматически на `*.vue`) лежат отдельно —
 `skeleton/.claude/rules/lang/vue.md` (path-scoped).
 
@@ -31,7 +36,12 @@ cp skeleton/.harness.conf.example ./.harness.conf
 
 # 2. Наложить Vue-пакет
 cp -r skeleton/lang-packs/vue/skills/add-component ./.claude/skills/
-cp skeleton/lang-packs/vue/docs/*.template ./.claude/docs/
+#    ИМЯ БЕЗ .template: правила зовут `.claude/docs/design-conformance.md`, а не
+#    `design-conformance.md.template` — копия «как есть» оставляет ссылки битыми
+for f in skeleton/lang-packs/vue/docs/*.md.template; do
+  cp "$f" "./.claude/docs/$(basename "$f" .template)"
+done
+#    потом заполнить плейсхолдеры внутри скопированных доков
 #    rules/lang/vue.md уже в ядре — оставить, удалить go.md/php.md если не нужны
 ```
 
