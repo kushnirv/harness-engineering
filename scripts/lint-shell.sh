@@ -69,17 +69,63 @@ if [[ "$TOTAL" -eq 0 ]]; then
   exit 1
 fi
 
+# --- shellcheck: семантика, которой синтаксический разбор не видит ---
+#
+# Порог info, а НЕ error. Замер 18.08: на `--severity=error` по репе 4 находки, на `warning`
+# добавляются ещё, а SC2086 (неэкранированная переменная) не появляется ни там, ни там — он
+# уровня info. То есть прежнее сообщение «кавычки, SC2086 НЕ проверены» обещало то, чего
+# настройка не давала и при установленном инструменте: обещание было ложным в обе стороны.
+#
+# Интерпретатор — по шебангу, как и в синтаксической части выше. `--shell=bash` на POSIX-файле
+# разрешает ровно те башизмы, ради отлова которых файл и объявлен POSIX. Сейчас такой файл
+# в репе один и находок на нём ноль, то есть дефект пока без симптома — чинится как гигиена.
+#
+# Гейт по РОСТУ, а не по нулю (ratchet). На info в репе три десятка замечаний; блокировать всё
+# сразу — значит не включить проверку никогда. Порог лежит в файле и сверяется с HEAD: поднять
+# его молча нельзя, иначе ratchet превращается в разрешение на новый долг (тот же приём, что
+# в check-ac-refs.sh).
+SC_BASELINE_FILE="${SC_BASELINE_FILE:-${REPO_ROOT}/scripts/lint-shellcheck.baseline}"
+
 if command -v shellcheck >/dev/null 2>&1; then
-  SC_FAIL=0
+  SC_FOUND=0
   while IFS= read -r f; do
-    shellcheck --severity=error --shell=bash "$f" || SC_FAIL=$((SC_FAIL + 1))
+    [[ -f "$f" ]] || continue
+    case "$(head -1 "$f")" in
+      *"env sh"*|*"/sh") SC_SHELL="sh" ;;
+      *)                 SC_SHELL="bash" ;;
+    esac
+    N="$(shellcheck --severity=info --shell="$SC_SHELL" --format=gcc "$f" 2>/dev/null | grep -c .)"
+    SC_FOUND=$((SC_FOUND + N))
   done < <(git ls-files '*.sh')
-  if [[ "$SC_FAIL" -gt 0 ]]; then
-    echo "  shellcheck: ошибок в $SC_FAIL файлах"
-    FAIL=$((FAIL + SC_FAIL))
+
+  SC_BASE=0
+  if [[ -f "$SC_BASELINE_FILE" ]]; then
+    SC_BASE="$(tr -dc '0-9' < "$SC_BASELINE_FILE")"
+    [[ -z "$SC_BASE" ]] && { echo "  в файле порога нет числа: $SC_BASELINE_FILE — считаю 0"; SC_BASE=0; }
+  else
+    echo "  нет файла порога shellcheck: $SC_BASELINE_FILE — считаю 0"
+  fi
+
+  # Поднятый порог — это не «стало лучше», это разрешённый долг. Сверяем с HEAD.
+  SC_REL="${SC_BASELINE_FILE#"${REPO_ROOT}"/}"
+  SC_HEAD="$(git -C "$REPO_ROOT" show "HEAD:${SC_REL}" 2>/dev/null | tr -dc '0-9')"
+  if [[ -n "$SC_HEAD" ]] && [[ "$SC_BASE" -gt "$SC_HEAD" ]]; then
+    echo "  ПОРОГ ПОДНЯТ: $SC_HEAD → $SC_BASE в $SC_REL — так ratchet не работает"
+    FAIL=$((FAIL + 1))
+  fi
+
+  if [[ "$SC_FOUND" -gt "$SC_BASE" ]]; then
+    echo "  shellcheck: замечаний $SC_FOUND при пороге $SC_BASE — РОСТ, гейт красный"
+    echo "  подробности: shellcheck --severity=info --shell=bash --format=gcc <файл>"
+    FAIL=$((FAIL + 1))
+  elif [[ "$SC_FOUND" -lt "$SC_BASE" ]]; then
+    echo "  shellcheck: замечаний $SC_FOUND при пороге $SC_BASE — опусти порог: echo $SC_FOUND > $SC_REL"
+  else
+    echo "  shellcheck: замечаний $SC_FOUND, порог держится"
   fi
 else
-  echo "  shellcheck не установлен — семантика (кавычки, SC2086) НЕ проверена. brew install shellcheck"
+  echo "  ДЕГРАДАЦИЯ: shellcheck не установлен — семантика (кавычки SC2086, unused SC2034) НЕ проверена."
+  echo "  brew install shellcheck"
 fi
 
 if [[ "$FAIL" -eq 0 ]]; then
