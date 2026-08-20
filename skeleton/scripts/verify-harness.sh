@@ -7,15 +7,9 @@
 # даёт exit 3 «ничего не проверено» — не зелёный (нечего проверять ≠ всё живо)
 # и не красный (кривой запуск ≠ поломанный харнесс).
 #
-# Тесты:
-#   1. .harness.conf существует и читается
-#   2. guard исполняем
-#   3. guard блокирует readonly зону (exit 2)
-#   4. guard пропускает разрешённый путь (exit != 2)
-#   5. sensor существует и исполняем
-#   6. load-context.sh существует (опционально)
-#   7. gate: защита от петли держит (stop_hook_active → exit 0 без прогона GATE_CMD)
-#   8. /note capture: append.sh исполняем
+# Состав проверок здесь не перечисляем: список из восьми пунктов пережил рост до
+# семнадцати и стал описывать не тот скрипт. Что проверяется — печатают [PASS]-строки
+# прогона, они и есть реестр.
 
 set -euo pipefail
 
@@ -28,6 +22,7 @@ FAIL=0
 # и под `set -e` это роняет скрипт на первом же ok()/fail() (счётчик стартует с 0).
 ok()   { echo "  [PASS] $1"; PASS=$((PASS + 1)); }
 fail() { echo "  [FAIL] $1"; FAIL=$((FAIL + 1)); }
+skip() { echo "  [SKIP] $1"; }
 
 echo "=== verify-harness ==="
 echo ""
@@ -291,6 +286,55 @@ if [[ "$OWN_WS" == "<не запускался>" ]]; then
   ok "sensor.sh: SENSOR_MAP владение — .tsx в py-папке молчит"
 else
   fail "sensor.sh: SENSOR_MAP владение нарушено — .tsx в py-папке запустил тесты в ${OWN_WS}"
+fi
+
+# Ярус 3 активирован. Проверка нужна именно здесь, а не только в verify-bootstrap:
+# тот смотрит на РОЖДЕНИЕ инстанса, а `.git/hooks` не версионируется — после `git clone`
+# хука нет ни у кого, кроме того, кто гонял bootstrap. Документация при этом продолжает
+# обещать проверку на push, и отличить «ярус прошёл» от «яруса нет» нечем.
+PP_LOGIC="${GUARDS}/pre-push.sh"
+PP_HOOK="${REPO_ROOT}/.git/hooks/pre-push"
+if [[ ! -f "$PP_LOGIC" ]]; then
+  fail "ярус 3: нет CORE-логики ${PP_LOGIC#"$REPO_ROOT"/} — перекати инстанс"
+elif [[ ! -d "${REPO_ROOT}/.git" ]]; then
+  skip "ярус 3: не git-репозиторий, ставить хук некуда"
+elif [[ ! -x "$PP_HOOK" ]]; then
+  fail "ярус 3 не подключён: нет исполняемого .git/hooks/pre-push — push ничем не проверяется"
+elif ! grep -q "guards/pre-push.sh" -- "$PP_HOOK"; then
+  fail "ярус 3: .git/hooks/pre-push не зовёт CORE-логику — на push идёт что-то другое"
+else
+  ok "ярус 3: .git/hooks/pre-push подключён и зовёт guards/pre-push.sh"
+fi
+
+# Дрейф CORE. Часть файлов защищена от `copier update` (`_skip_if_exists`), чтобы
+# инстанс мог дорабатывать их под себя. Плата — расхождение с шаблоном, которого в диффе
+# обновления не видно вовсе. Детектор уже есть (`harness-status.sh` в репозитории шаблона),
+# ему не хватало повода запуститься: здесь и есть то место, где спрашивают состояние.
+#
+# DIVERGED и MISSING разведены НАМЕРЕННО. Расхождение — законное состояние (ради него защита
+# и заводилась), и если красить им смоук, его выключат целиком вместе с верными пунктами.
+# А вот пропавший CORE-файл — поломка доставки, и это FAIL.
+LOCAL_CONF="${HARNESS_LOCAL_CONF:-${HOME:-}/.harness/$(basename "$REPO_ROOT").conf}"
+# shellcheck source=/dev/null
+[[ -f "$LOCAL_CONF" ]] && source "$LOCAL_CONF"
+STATUS_SH="${HARNESS_TEMPLATE_PATH:-}/scripts/harness-status.sh"
+if [[ -z "${HARNESS_TEMPLATE_PATH:-}" ]]; then
+  skip "дрейф CORE не проверен: HARNESS_TEMPLATE_PATH не задан в ${LOCAL_CONF}"
+elif [[ ! -f "$STATUS_SH" ]]; then
+  fail "дрейф CORE: ${HARNESS_TEMPLATE_PATH} не похож на клон шаблона — нет scripts/harness-status.sh"
+else
+  DRIFT_OUT="$(bash "$STATUS_SH" "$REPO_ROOT" 2>&1 || true)"
+  GONE="$(printf '%s\n' "$DRIFT_OUT" | awk '$1 == "MISSING" { printf "%s ", $2 }')"
+  DIVERGED="$(printf '%s\n' "$DRIFT_OUT" | grep -E '^  DIVERGED ' || true)"
+  if [[ -n "$GONE" ]]; then
+    fail "дрейф CORE: CORE-файлов нет в инстансе: ${GONE% }"
+  elif [[ -n "$DIVERGED" ]]; then
+    ok "дрейф CORE: MISSING нет (расхождения ниже — не провал, решение владельца)"
+    printf '%s\n' "$DIVERGED" | sed 's/^  DIVERGED /  [DRIFT] расходится с шаблоном: /'
+    echo "          подъём наверх — harness-contribute.sh в репозитории шаблона"
+  else
+    ok "дрейф CORE: инстанс совпадает с шаблоном"
+  fi
 fi
 
 echo ""
