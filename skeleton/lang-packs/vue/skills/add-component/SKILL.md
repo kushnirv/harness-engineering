@@ -46,6 +46,6 @@ argument-hint: "[ComponentName]"
 - [ ] Barrel `index.ts` создан с именованным экспортом
 - [ ] Компонент добавлен в центральный `index.ts` пакета
 - [ ] Story создана в `__stories__/`
-- [ ] Ревью по чеклисту: `@.claude/docs/REVIEW-vue.md`
+- [ ] Ревью по чеклисту: `.claude/docs/REVIEW-vue.md`
 - [ ] Snapshot-тест создан в `__tests__/`
 - [ ] Sensor запустил тесты — зелёные

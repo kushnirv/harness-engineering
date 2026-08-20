@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Append-only capture: кидает сырую заметку в буфер PENDING-NOTES.md с timestamp.
-# Вызывается из /note (SKILL.md) через инлайн-bash. Урок fenris: только append (>>),
+# Вызывается из /note (SKILL.md) через инлайн-bash. Урок боевого инстанса: только append (>>),
 # никаких strReplace — на больших буферах diff-инструмент таймаутит.
 #
 # Generic: путь буфера через CLAUDE_PROJECT_DIR (fallback на git root / pwd).
@@ -11,7 +11,7 @@ REPO_ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || 
 BUFFER="${REPO_ROOT}/.claude/PENDING-NOTES.md"
 
 NOTE="${*:-}"
-[[ -z "${NOTE// }" ]] && { echo "note: пустая заметка — пропущено" >&2; exit 0; }
+[[ "$NOTE" =~ ^[[:space:]]*$ ]] && { echo "note: пустая заметка — пропущено" >&2; exit 0; }
 
 mkdir -p "$(dirname "$BUFFER")"
 if [[ ! -f "$BUFFER" ]]; then
