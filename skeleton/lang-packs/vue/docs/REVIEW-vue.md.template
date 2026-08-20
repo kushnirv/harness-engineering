@@ -19,4 +19,4 @@
 - [ ] Только <STYLE_APPROACH> — нет инлайн hex/rgb в `background`/`color`
 - [ ] Нет `!important` без обоснования, нет magic numbers — только токены
 
-> Реестр найденных ловушек — `@.claude/docs/gotchas.md`.
+> Реестр найденных ловушек — `.claude/docs/gotchas.md` (читать Read по нужде).
