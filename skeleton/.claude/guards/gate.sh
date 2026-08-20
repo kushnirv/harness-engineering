@@ -38,7 +38,6 @@ try:
 except Exception:
     print(False)
 " 2>/dev/null || echo False)"
-  [[ "$STOP_ACTIVE" == "True" ]] && exit 0
 fi
 
 # Fail-open: gate не настроен → молчим (как sensor без TEST_CMD).
@@ -59,5 +58,15 @@ set -e
 
 echo "$OUTPUT" | tail -40 >&2
 echo "" >&2
+
+# Агент уже в forced-continuation после нашего же блока: второй раз не блокируем,
+# иначе бесконечный цикл. Но и не молчим — молчаливый пропуск неотличим от
+# успеха, а `rules/common/testing.md` требует, чтобы проверка падала, а не
+# исчезала. Поэтому итог печатаем всегда, а ход отпускаем.
+if [[ "${STOP_ACTIVE:-False}" == "True" ]]; then
+  echo "GATE FAILED (exit ${EXIT_CODE}): \`${GATE_CMD}\` не прошёл. Ход НЕ блокируется — это повторный Stop, — но проверка красная." >&2
+  exit 0
+fi
+
 echo "GATE FAILED (exit ${EXIT_CODE}): \`${GATE_CMD}\` не прошёл. Почини ошибки выше прежде чем завершить ход или push." >&2
 exit 2
