@@ -306,6 +306,37 @@ else
   ok "ярус 3: .git/hooks/pre-push подключён и зовёт guards/pre-push.sh"
 fi
 
+# Дрейф CORE. Часть файлов защищена от `copier update` (`_skip_if_exists`), чтобы
+# инстанс мог дорабатывать их под себя. Плата — расхождение с шаблоном, которого в диффе
+# обновления не видно вовсе. Детектор уже есть (`harness-status.sh` в репозитории шаблона),
+# ему не хватало повода запуститься: здесь и есть то место, где спрашивают состояние.
+#
+# DIVERGED и MISSING разведены НАМЕРЕННО. Расхождение — законное состояние (ради него защита
+# и заводилась), и если красить им смоук, его выключат целиком вместе с верными пунктами.
+# А вот пропавший CORE-файл — поломка доставки, и это FAIL.
+LOCAL_CONF="${HARNESS_LOCAL_CONF:-${HOME:-}/.harness/$(basename "$REPO_ROOT").conf}"
+# shellcheck source=/dev/null
+[[ -f "$LOCAL_CONF" ]] && source "$LOCAL_CONF"
+STATUS_SH="${HARNESS_TEMPLATE_PATH:-}/scripts/harness-status.sh"
+if [[ -z "${HARNESS_TEMPLATE_PATH:-}" ]]; then
+  skip "дрейф CORE не проверен: HARNESS_TEMPLATE_PATH не задан в ${LOCAL_CONF}"
+elif [[ ! -f "$STATUS_SH" ]]; then
+  fail "дрейф CORE: ${HARNESS_TEMPLATE_PATH} не похож на клон шаблона — нет scripts/harness-status.sh"
+else
+  DRIFT_OUT="$(bash "$STATUS_SH" "$REPO_ROOT" 2>&1 || true)"
+  GONE="$(printf '%s\n' "$DRIFT_OUT" | awk '$1 == "MISSING" { printf "%s ", $2 }')"
+  DIVERGED="$(printf '%s\n' "$DRIFT_OUT" | grep -E '^  DIVERGED ' || true)"
+  if [[ -n "$GONE" ]]; then
+    fail "дрейф CORE: CORE-файлов нет в инстансе: ${GONE% }"
+  elif [[ -n "$DIVERGED" ]]; then
+    ok "дрейф CORE: MISSING нет (расхождения ниже — не провал, решение владельца)"
+    printf '%s\n' "$DIVERGED" | sed 's/^  DIVERGED /  [DRIFT] расходится с шаблоном: /'
+    echo "          подъём наверх — harness-contribute.sh в репозитории шаблона"
+  else
+    ok "дрейф CORE: инстанс совпадает с шаблоном"
+  fi
+fi
+
 echo ""
 echo "=== Результат: ${PASS} pass / ${FAIL} fail ==="
 

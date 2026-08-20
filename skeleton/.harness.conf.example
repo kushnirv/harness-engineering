@@ -194,6 +194,11 @@ GOTCHA_ID_PREFIX="## §"
 #     WIKI_PATH="$HOME/wiki/projects/<проект>-harness"
 # load-context.sh читает его ПОСЛЕ этого файла. Вики нет — слой опциональный, скрипт молчит.
 
+# Там же живёт путь к клону шаблона — он тоже у каждого свой:
+#     HARNESS_TEMPLATE_PATH="$HOME/src/harness-engineering"
+# Его читает verify-harness.sh, чтобы показать дрейф CORE (`harness-status.sh` лежит в
+# шаблоне и в инстанс не доставляется). Не задан — смоук скажет SKIP и пойдёт дальше.
+
 # --- Harness version ---
 
 # Реальная версия CORE — в `.copier-answers.yml` (её пишет Copier при copier copy/update).
