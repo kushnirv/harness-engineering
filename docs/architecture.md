@@ -175,7 +175,7 @@ harness-template/
 ├── .claude/                        ← харнесс этой репы; dogfood capture-flow
 │   └── skills/note/                ← /note живой (sensor/guard не нужны: нет билда/тестов)
 ├── skeleton/                       ← КОПИРУЕТСЯ в потребителя
-│   ├── CLAUDE.md.jinja          ← роутер с плейсхолдерами
+│   ├── CLAUDE.md.template          ← роутер с плейсхолдерами
 │   ├── PACKAGE_CLAUDE.md.template  ← guide пакета (generic)
 │   ├── .claude/
 │   │   ├── settings.json.template  ← хуки: PreToolUse(guard), PostToolUse(sensor), Stop(gate), UserPromptSubmit(nudge), SessionStart/End
@@ -229,7 +229,7 @@ harness-template/
 │   ├── docs/specs/_template.md     ← шаблон спеки (CORE, едет всем: AC-ID + флоу среза)
 │   ├── .husky/pre-push             ← опция для команд, шарящих хуки через package.json
 │   ├── .copier-answers.yml.jinja   ← источник ответов Copier в инстансе (НЕ игнорировать)
-│   └── .harness.conf       ← все параметры с комментариями
+│   └── .harness.conf.example       ← все параметры с комментариями
 ├── scripts/
 │   ├── bootstrap.sh                ← раскатка инстанса: второй канал доставки, не только Copier
 │   ├── harness-status.sh           ← замер дрейфа инстанс ↔ шаблон (DIVERGED ≠ «инстанс старее»)

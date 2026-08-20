@@ -76,7 +76,7 @@ case "$LANG_PACK" in
     AC_GLOBS="*Tests.cs *Test.cs"
     AC_DIR="tests"
     ;;
-  vue|go|php|none)
+  vue|react|go|php|none)
     git init -q .
     WATCH_DIR="src"
     TEST_CMD="npx vitest related --run"
@@ -95,7 +95,7 @@ case "$LANG_PACK" in
     AC_DIR="src"
     ;;
   *)
-    echo "неизвестный lang: $LANG_PACK (python|vue|go|php|dotnet|none)" >&2
+    echo "неизвестный lang: $LANG_PACK (python|vue|react|go|php|dotnet|none)" >&2
     exit 1
     ;;
 esac
@@ -189,10 +189,10 @@ render() {
       -e "s|<ACCESS_RULES>|$TODO_MARK|g" "$1"
 }
 
-render "$TPL/skeleton/CLAUDE.md.jinja" > CLAUDE.md
+render "$TPL/skeleton/CLAUDE.md.template" > CLAUDE.md
 
 mkdir -p .claude
-render "$TPL/skeleton/.claude/settings.json" \
+render "$TPL/skeleton/.claude/settings.json.template" \
   | sed "s|run-test-hook.sh|$SENSOR|g" > .claude/settings.json
 
 # Doc-каркас. Copier их не привозит: .claude/docs в _exclude, плюс маска *.template.
