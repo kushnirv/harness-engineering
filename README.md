@@ -126,7 +126,7 @@ bash scripts/lint-shell.sh           # синтаксис всех .sh: bash-ф�
 - **Как устроено** — диаграммы, дерево, четыре яруса проверок, языковые слои, память,
   capture-flow, Copier-sync → [docs/architecture.md](docs/architecture.md)
 - **Параметры конфига** — самодокументированы в
-  [skeleton/.harness.conf](skeleton/.harness.conf)
+  [skeleton/.harness.conf.example](skeleton/.harness.conf.example)
 - **Методология Specify → Implement → Review** →
   [docs/specify-implement-review.md](docs/specify-implement-review.md)
 - **Архитектурные решения (ADR)** → [docs/decisions.md](docs/decisions.md)

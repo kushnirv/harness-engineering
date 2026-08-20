@@ -36,10 +36,10 @@ BASELINE_FILE="${CORE_PURITY_BASELINE:-${REPO_ROOT}/scripts/lint-core-purity.bas
 #
 # Область — «что едет КАЖДОМУ инстансу», а не «что лежит в rules/». Первая версия смотрела
 # только rules/common и скилы, и мимо гейта проходили 8 доков из цикла доставки `bootstrap.sh`
-# плюс сам роутер `CLAUDE.md.jinja` — 6 стек-токенов, которых никто не проверял (нашло
+# плюс сам роутер `CLAUDE.md.template` — 6 стек-токенов, которых никто не проверял (нашло
 # независимое ревью 13.08). Языковые слои (`rules/lang/`, `lang-packs/`) СЮДА НЕ ВХОДЯТ:
 # стек-токен там и есть их работа.
-CORE_GLOBS="${CORE_PURITY_GLOBS:-${REPO_ROOT}/skeleton/.claude/rules/common/*.md ${REPO_ROOT}/skeleton/.claude/skills/*/SKILL.md ${REPO_ROOT}/skeleton/.claude/docs/*.md.template ${REPO_ROOT}/skeleton/CLAUDE.md.jinja ${REPO_ROOT}/skeleton/PACKAGE_CLAUDE.md.jinja ${REPO_ROOT}/skeleton/docs/specs/_template.md}"
+CORE_GLOBS="${CORE_PURITY_GLOBS:-${REPO_ROOT}/skeleton/.claude/rules/common/*.md ${REPO_ROOT}/skeleton/.claude/skills/*/SKILL.md ${REPO_ROOT}/skeleton/.claude/docs/*.md.template ${REPO_ROOT}/skeleton/CLAUDE.md.template ${REPO_ROOT}/skeleton/PACKAGE_CLAUDE.md.template ${REPO_ROOT}/skeleton/docs/specs/_template.md}"
 
 say()  { [ "$QUIET" -eq 1 ] || printf '%s\n' "$1"; }
 warn() { printf 'lint-core-purity: %s\n' "$1" >&2; }

@@ -210,7 +210,7 @@ while IFS= read -r hit; do
       || DANGLING="${DANGLING}${loc}:${lnum}(${name}) "
   done < <(printf '%s' "${hit#*:*:}" | grep -o '\.claude/docs/[A-Za-z0-9_-]\+\.md' | sort -u)
 done < <(grep -rn '\.claude/docs/[A-Za-z0-9_-]\+\.md' skeleton/.claude/rules skeleton/.claude/skills \
-           skeleton/.claude/docs skeleton/CLAUDE.md.jinja 2>/dev/null || true)
+           skeleton/.claude/docs skeleton/CLAUDE.md.template 2>/dev/null || true)
 check "ссылки skeleton на доки: доставляется или помечена условной" "" "$DANGLING"
 
 # 11. Роутер потребителя описывает те же хуки, что настроены. `CLAUDE.md` грузится у каждого
@@ -218,7 +218,7 @@ check "ссылки skeleton на доки: доставляется или по
 # до 14.08 она вешала guard на PostToolUse (где блокировать уже нечего), Stop называла
 # «предлагает обновить лог», а nudge, SessionEnd и PreToolUse(Bash) не упоминала вовсе.
 HOOKDRIFT=""
-SJ="skeleton/.claude/settings.json"; CT="skeleton/CLAUDE.md.jinja"
+SJ="skeleton/.claude/settings.json.template"; CT="skeleton/CLAUDE.md.template"
 if [[ -f "$SJ" && -f "$CT" ]]; then
   for ev in PreToolUse PostToolUse Stop UserPromptSubmit SessionStart SessionEnd; do
     grep -q "\"${ev}\"" "$SJ" && IN_SJ=да || IN_SJ=нет
@@ -228,7 +228,7 @@ if [[ -f "$SJ" && -f "$CT" ]]; then
 else
   HOOKDRIFT="нет одного из файлов: ${SJ} ${CT}"
 fi
-check "хуки в CLAUDE.md.jinja = событиям settings.json" "" "$HOOKDRIFT"
+check "хуки в CLAUDE.md.template = событиям settings.json.template" "" "$HOOKDRIFT"
 
 # 12. Роутер называет все всегда-грузимые правила. `comments.md` доезжал обоими каналами и
 # грузился у потребителя, а роутер перечислял пять правил из шести (ревью 14.08).
@@ -243,7 +243,7 @@ check "все правила rules/common названы в роутере" "" "
 # 21. `@`-импортов нет НИ В ОДНОМ файле skeleton. Запрет живёт в CORE («грузит на старте, не
 # лениво — для JIT не годится»), но охранял его только ассерт в `verify-bootstrap`, и тот смотрит
 # на СГЕНЕРИРОВАННЫЙ `CLAUDE.md`. Файл, который не генерируется, был вне охраны целиком: в
-# `PACKAGE_CLAUDE.md.jinja` `@.claude/docs/ARCHITECTURE.md` прожил незамеченным (ревью 14.08).
+# `PACKAGE_CLAUDE.md.template` `@.claude/docs/ARCHITECTURE.md` прожил незамеченным (ревью 14.08).
 # Проверка идёт по исходникам, поэтому видит и то, что ни один канал не рендерит.
 #
 # Внутри ``` -блоков `@` не считается: там лежат ПРИМЕРЫ промптов, а `@file` в промпте, набранном
@@ -391,16 +391,16 @@ check "каждая ссылка ADR-N резолвится в реестре" "
 GUARDDEAD="$(python3 - <<'PY'
 import os, re
 conf = 'scripts/lib/layers.sh'
-settings = 'skeleton/.claude/settings.json'
-# Диспетчер зовёт дочерние хуки сам: страж, на который ссылается другой страж,
-# подключён не хуже названного в настройках напрямую.
+settings = 'skeleton/.claude/settings.json.template'
+# Страж, которого зовёт другой страж (диспетчер), подключён не хуже названного
+# в настройках напрямую: иначе дочерние хуки роутера выглядят мёртвыми.
 import glob as _glob
 _peers = ''.join(open(f, encoding='utf-8').read() for f in _glob.glob('skeleton/.claude/guards/*.sh'))
 boot = 'scripts/bootstrap.sh'
 core = re.findall(r'"(\.claude/guards/[^"]+\.sh)"', open(conf, encoding='utf-8').read())
 s = open(settings, encoding='utf-8').read() if os.path.isfile(settings) else ''
 b = open(boot, encoding='utf-8').read() if os.path.isfile(boot) else ''
-allowed = {'pre-push.sh'}
+allowed = {'pre-push.sh', 'run-pytest-hook.sh'}
 dead = []
 for path in core:
     name = os.path.basename(path)
@@ -408,9 +408,11 @@ for path in core:
         # исключение законно только пока его вызыватель существует
         if name == 'pre-push.sh' and 'pre-push' not in b:
             dead.append(f'{name}(bootstrap больше не ставит git-хук)')
+        if name == 'run-pytest-hook.sh' and 'run-pytest-hook' not in b:
+            dead.append(f'{name}(bootstrap больше не подставляет)')
         continue
     if name not in s and name not in _peers:
-        dead.append(f'{name}(не подключён ни в settings.json, ни другим стражем)')
+        dead.append(f'{name}(не подключён ни в settings, ни другим стражем)')
 print(' '.join(dead), end='')
 PY
 )"
