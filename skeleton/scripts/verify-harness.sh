@@ -28,6 +28,7 @@ FAIL=0
 # и под `set -e` это роняет скрипт на первом же ok()/fail() (счётчик стартует с 0).
 ok()   { echo "  [PASS] $1"; PASS=$((PASS + 1)); }
 fail() { echo "  [FAIL] $1"; FAIL=$((FAIL + 1)); }
+skip() { echo "  [SKIP] $1"; }
 
 echo "=== verify-harness ==="
 echo ""
@@ -291,6 +292,24 @@ if [[ "$OWN_WS" == "<не запускался>" ]]; then
   ok "sensor.sh: SENSOR_MAP владение — .tsx в py-папке молчит"
 else
   fail "sensor.sh: SENSOR_MAP владение нарушено — .tsx в py-папке запустил тесты в ${OWN_WS}"
+fi
+
+# Ярус 3 активирован. Проверка нужна именно здесь, а не только в verify-bootstrap:
+# тот смотрит на РОЖДЕНИЕ инстанса, а `.git/hooks` не версионируется — после `git clone`
+# хука нет ни у кого, кроме того, кто гонял bootstrap. Документация при этом продолжает
+# обещать проверку на push, и отличить «ярус прошёл» от «яруса нет» нечем.
+PP_LOGIC="${GUARDS}/pre-push.sh"
+PP_HOOK="${REPO_ROOT}/.git/hooks/pre-push"
+if [[ ! -f "$PP_LOGIC" ]]; then
+  fail "ярус 3: нет CORE-логики ${PP_LOGIC#"$REPO_ROOT"/} — перекати инстанс"
+elif [[ ! -d "${REPO_ROOT}/.git" ]]; then
+  skip "ярус 3: не git-репозиторий, ставить хук некуда"
+elif [[ ! -x "$PP_HOOK" ]]; then
+  fail "ярус 3 не подключён: нет исполняемого .git/hooks/pre-push — push ничем не проверяется"
+elif ! grep -q "guards/pre-push.sh" -- "$PP_HOOK"; then
+  fail "ярус 3: .git/hooks/pre-push не зовёт CORE-логику — на push идёт что-то другое"
+else
+  ok "ярус 3: .git/hooks/pre-push подключён и зовёт guards/pre-push.sh"
 fi
 
 echo ""
