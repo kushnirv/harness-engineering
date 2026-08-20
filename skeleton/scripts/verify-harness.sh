@@ -79,7 +79,7 @@ if [[ -n "${READONLY_ZONES:-}" ]]; then
   FIRST_ZONE=$(echo "$READONLY_ZONES" | awk '{print $1}')
   TEST_FILE="${REPO_ROOT}/${FIRST_ZONE}/test-verify.txt"
 
-  GUARD_OUT=$(echo "{\"tool_input\": {\"path\": \"${TEST_FILE}\"}}" | bash "$GUARD" 2>&1) || GUARD_EXIT=$?
+  echo "{\"tool_input\": {\"path\": \"${TEST_FILE}\"}}" | bash "$GUARD" >/dev/null 2>&1 || GUARD_EXIT=$?
   GUARD_EXIT=${GUARD_EXIT:-0}
 
   if [[ "$GUARD_EXIT" -eq 2 ]]; then
@@ -94,7 +94,7 @@ fi
 # 4. guard пропускает разрешённый путь
 if [[ -n "${WATCH_DIR:-}" ]]; then
   ALLOWED_FILE="${REPO_ROOT}/${WATCH_DIR}/some-component.vue"
-  GUARD_OUT2=$(echo "{\"tool_input\": {\"path\": \"${ALLOWED_FILE}\"}}" | bash "$GUARD" 2>&1) || GUARD_EXIT2=$?
+  echo "{\"tool_input\": {\"path\": \"${ALLOWED_FILE}\"}}" | bash "$GUARD" >/dev/null 2>&1 || GUARD_EXIT2=$?
   GUARD_EXIT2=${GUARD_EXIT2:-0}
 
   if [[ "$GUARD_EXIT2" -ne 2 ]]; then
