@@ -117,46 +117,151 @@ else
   echo "  [SKIP] load-context.sh не найден — SessionStart без долгосрочной памяти"
 fi
 
-# 7. gate: защита от петли. На stop_hook_active gate обязан выйти 0, не блокируя
-# GATE_CMD — иначе Stop-хук уходит в бесконечный цикл. Саму проверку он при
-# этом ВЫПОЛНЯЕТ и печатает итог: молчаливый пропуск неотличим от успеха.
-#
-# Гоняем на ПОДСТАВНОМ REPO_ROOT с `GATE_CMD="exit 9"`, а не на конфиге проекта.
-# Причина: на настоящем конфиге исход один и тот же и когда защита работает, и когда
-# её нет — GATE_CMD проходит, gate возвращает 0. Проверка была бы вакуумной (проверено
-# мутацией: защиту убрал, тест остался зелёным). Команда, которая гарантированно падает,
-# делает две ветки различимыми: 0 = не запускалась, 2 = запустилась.
+# Гейт: он и есть проверка на конце хода. Четыре ветки, и все — на ПОДСТАВНОМ REPO_ROOT
+# с `GATE_CMD="exit 9"`, а не на конфиге проекта. Причина: на настоящем конфиге исход один и
+# тот же и когда защита работает, и когда её нет — команда проходит, gate возвращает 0, и
+# проверка вакуумна (проверено мутацией: защиту убрал, тест остался зелёным). Подстановка
+# GATE_CMD через `env` тут не годится: заготовка конфига пишет голое присваивание, и `source`
+# затирает окружение — на свежем инстансе проверка краснела впустую.
 GATE="${REPO_ROOT}/.claude/guards/gate.sh"
+gate_sandbox() { local d; d="$(mktemp -d)"; echo 'GATE_CMD="exit 9"' > "${d}/.harness.conf"; printf '%s' "$d"; }
 if [[ -x "$GATE" ]]; then
-  GATE_SANDBOX="$(mktemp -d)"
-  echo 'GATE_CMD="exit 9"' > "${GATE_SANDBOX}/.harness.conf"
-  GATE_EXIT=0
-  printf '%s' '{"stop_hook_active": true}' \
-    | REPO_ROOT="$GATE_SANDBOX" bash "$GATE" >/dev/null 2>&1 || GATE_EXIT=$?
-  rm -rf "$GATE_SANDBOX"
-  if [[ "$GATE_EXIT" -eq 0 ]]; then
+  # Красная проверка на обычном Stop обязана блокировать ход.
+  SB="$(gate_sandbox)"; RED_EXIT=0
+  printf '%s' '{}' | REPO_ROOT="$SB" bash "$GATE" >/dev/null 2>&1 || RED_EXIT=$?
+  rm -rf "$SB"
+  if [[ "$RED_EXIT" -eq 2 ]]; then
+    ok "gate.sh блокирует конец хода на красной проверке (exit 2)"
+  else
+    fail "gate.sh НЕ заблокировал красную проверку (exit ${RED_EXIT}, ожидалось 2)"
+  fi
+
+  # Защита от петли: агент уже в forced-continuation после нашего же блока.
+  SB="$(gate_sandbox)"; LOOP_EXIT=0
+  LOOP_OUT="$(printf '%s' '{"stop_hook_active": true}' | REPO_ROOT="$SB" bash "$GATE" 2>&1)" || LOOP_EXIT=$?
+  rm -rf "$SB"
+  if [[ "$LOOP_EXIT" -eq 0 ]]; then
     ok "gate.sh: защита от петли держит (stop_hook_active → ход не блокируется)"
   else
-    fail "gate.sh на stop_hook_active вернул ${GATE_EXIT}: Stop-хук уйдёт в цикл"
+    fail "gate.sh на stop_hook_active вернул ${LOOP_EXIT}: Stop-хук уйдёт в цикл"
   fi
 
   # И не молчит: exit 0 при красной проверке неотличим от «гейт прошёл».
-  GATE_SANDBOX="$(mktemp -d)"
-  echo 'GATE_CMD="exit 9"' > "${GATE_SANDBOX}/.harness.conf"
-  LOUD="$(printf '%s' '{"stop_hook_active": true}' \
-    | REPO_ROOT="$GATE_SANDBOX" bash "$GATE" 2>&1 || true)"
-  rm -rf "$GATE_SANDBOX"
-  if [[ -n "${LOUD// }" ]]; then
+  if [[ -n "${LOOP_OUT// }" ]]; then
     ok "gate.sh сообщает о красной проверке, даже когда не блокирует"
   else
     fail "gate.sh пропустил красную проверку МОЛЧА — неотличимо от успеха"
   fi
+
+  # Зелёный молчит: иначе отчёт на каждом повторном Stop перестанут читать.
+  SB="$(mktemp -d)"; echo 'GATE_CMD="true"' > "${SB}/.harness.conf"
+  QUIET_OUT="$(printf '%s' '{"stop_hook_active": true}' | REPO_ROOT="$SB" bash "$GATE" 2>&1 || true)"
+  rm -rf "$SB"
+  if [[ -z "${QUIET_OUT// }" ]]; then
+    ok "gate.sh молчит на зелёной проверке (mute the green)"
+  else
+    fail "gate.sh шумит на зелёной проверке: ${QUIET_OUT}"
+  fi
+
   if [[ -z "${GATE_CMD:-}" ]]; then
     echo "  [SKIP] GATE_CMD в .harness.conf пуст — Ярус 2 ничего не проверяет"
   fi
 else
   fail "gate.sh не найден или не исполняем: ${GATE}"
 fi
+
+# 18. Нудж отвечает на boundary-промпт. Пустой ответ означал бы, что правило
+# testing.md про уровень verify не активируется ничем.
+NUDGE="${GUARDS}/nudge.sh"
+if [[ -x "$NUDGE" ]]; then
+  NUDGE_OUT=$(echo '{"prompt": "почини запрос к api бэкенда"}' | bash "$NUDGE" 2>/dev/null || true)
+  if [[ -n "${NUDGE_OUT// }" ]]; then
+    ok "nudge.sh отвечает на boundary-промпт"
+  else
+    fail "nudge.sh промолчал на boundary-промпте — напоминание про verified: мертво"
+  fi
+else
+  fail "nudge.sh не найден или не исполняем: ${NUDGE}"
+fi
+
+# 20-21. Связность settings.json с диском: хук, ссылающийся на несуществующий
+# файл, отваливается тихо — событие просто перестаёт срабатывать.
+SETTINGS="${REPO_ROOT}/.claude/settings.json"
+if [[ -f "$SETTINGS" ]] && command -v python3 >/dev/null 2>&1; then
+  MISSING="$(python3 - "$SETTINGS" "$REPO_ROOT" <<'PYEOF'
+import json, re, sys, os
+
+settings, root = sys.argv[1], sys.argv[2]
+hooks = json.load(open(settings)).get('hooks', {})
+missing = []
+
+for event, groups in hooks.items():
+    for group in groups:
+        for hook in group.get('hooks', []):
+            if hook.get('type') != 'command':
+                continue
+            for path in re.findall(r'\$CLAUDE_PROJECT_DIR/([^"\s]+)', hook.get('command', '')):
+                if not os.path.exists(os.path.join(root, path)):
+                    missing.append(f'{event}: {path}')
+
+print('\n'.join(missing))
+PYEOF
+)"
+  if [[ -z "${MISSING// }" ]]; then
+    ok "settings.json: все командные хуки указывают на существующие файлы"
+  else
+    fail "settings.json ссылается на несуществующее: ${MISSING//$'\n'/, }"
+  fi
+
+  WIRED="$(python3 -c "import json,sys; print(' '.join(sorted(json.load(open(sys.argv[1])).get('hooks', {}))))" "$SETTINGS")"
+  EXPECTED="InstructionsLoaded PostToolUse PreToolUse SessionEnd SessionStart Stop UserPromptSubmit"
+  if [[ "$WIRED" == "$EXPECTED" ]]; then
+    ok "settings.json: подключены все семь событий"
+  else
+    fail "settings.json: события разошлись с ожидаемыми — «${WIRED}» вместо «${EXPECTED}»"
+  fi
+else
+  skip "settings.json не найден или нет python3 — связность хуков не проверена"
+fi
+
+# 24-25. Новые стражи: подключены — значит обязаны различать свои ветки.
+# Проверка 20 подтверждает лишь, что путь существует; выпади страж из
+# settings.json, она осталась бы зелёной.
+BLE="${GUARDS}/block-large-edit.sh"
+if [[ -x "$BLE" ]]; then
+  # Файл нужен любой существующий и покрупнее порога в 1KB: правила common — CORE,
+  # они есть в каждом инстансе.
+  BIG="${REPO_ROOT}/.claude/rules/common/testing.md"
+  BLOCK=0
+  echo "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"${BIG}\"}}" \
+    | env LARGE_EDIT_KB=1 bash "$BLE" >/dev/null 2>&1 || BLOCK=$?
+  PASS_THROUGH=0
+  echo "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"${BIG}\"}}" \
+    | env LARGE_EDIT_KB=99999 bash "$BLE" >/dev/null 2>&1 || PASS_THROUGH=$?
+  if [[ "$BLOCK" -eq 2 && "$PASS_THROUGH" -eq 0 ]]; then
+    ok "block-large-edit.sh различает ветки (порог мал → 2, велик → 0)"
+  else
+    fail "block-large-edit.sh не различает ветки: мал=${BLOCK}, велик=${PASS_THROUGH}"
+  fi
+else
+  fail "block-large-edit.sh не найден или не исполняем: ${BLE}"
+fi
+
+LOGI="${GUARDS}/log-instructions.sh"
+if [[ -x "$LOGI" ]]; then
+  LOGDIR="$(mktemp -d)"
+  echo '{"load_reason":"path_glob_match","file_path":"probe/shell.md"}' \
+    | env CLAUDE_PROJECT_DIR="$LOGDIR" METRICS_DIR=metrics bash "$LOGI" >/dev/null 2>&1 || true
+  if [[ -s "${LOGDIR}/metrics/instructions-load.log" ]]; then
+    ok "log-instructions.sh пишет строку в METRICS_DIR"
+  else
+    fail "log-instructions.sh ничего не записал — канарейка мертва"
+  fi
+  rm -rf "$LOGDIR"
+else
+  fail "log-instructions.sh не найден или не исполняем: ${LOGI}"
+fi
+
 
 # 8. /note capture skill (append.sh исполняем).
 # Путь именно в .claude/ проекта: раньше тут стоял ${REPO_ROOT}/skeleton/... — в любом
